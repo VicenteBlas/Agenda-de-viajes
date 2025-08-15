@@ -1,0 +1,291 @@
+{% extends "interfaz_admin.html" %}
+{% block content %}
+
+<div class="package-container">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-suitcase-lg"></i> Paquetes Turísticos</h1>
+    <div class="d-flex align-items-center">
+      <div class="me-3">
+        <input 
+          type="text" 
+          id="buscadorDestino" 
+          class="form-control" 
+          placeholder="Buscar por destino..."
+        >
+      </div>
+      <a href="{{ url_for('form_paquete') }}" class="btn btn-success">
+        <i class="bi bi-plus-circle"></i> Nuevo Paquete
+      </a>
+    </div>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show" role="alert">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+    {% for paquete in paquetes %}
+    <div class="col">
+      <div class="package-card">
+        {% if paquete.Imagen %}
+          <img src="{{ paquete.Imagen }}" alt="Imagen de {{ paquete.Nombre }}" class="package-img">
+        {% else %}
+          <img src="https://via.placeholder.com/300x180" alt="Imagen del paquete" class="package-img">
+        {% endif %}
+        <div class="package-body">
+          <h5>{{ paquete.Nombre }}</h5>
+          <p class="text-muted mb-1"><strong>Destino:</strong> {{ paquete.Destino }}</p>
+          <p class="rating mb-2"><i class="bi bi-star-fill text-warning"></i> {{ paquete.Calificacion }} | {{ paquete.Promocion }}</p>
+          <p class="price mb-2">${{ '{:,.0f}'.format(paquete.Precio) }} <small class="text-muted">/noche</small></p>
+          <p class="text-muted small mb-3">
+            <i class="bi bi-calendar"></i> {{ paquete.Fecha_Inicio.strftime('%d %b') }} - {{ paquete.Fecha_Final.strftime('%d %b %Y') }}
+          </p>
+          
+          <div class="acciones">
+            <a href="{{ url_for('editar_paquete', id=paquete.idPaquete) }}" class="btn btn-sm btn-warning">
+              <i class="bi bi-pencil"></i> Editar
+            </a>
+            
+            <form class="inline-form" action="{{ url_for('eliminar_paquete', id=paquete.idPaquete) }}" method="POST">
+              <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('¿Eliminar este paquete?')">
+                <i class="bi bi-trash"></i> Eliminar
+              </button>
+            </form>
+            
+            <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#contactModal{{ paquete.idPaquete }}">
+              <i class="bi bi-whatsapp"></i> WhatsApp
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal para selección de contactos -->
+    <div class="modal fade" id="contactModal{{ paquete.idPaquete }}" tabindex="-1" aria-labelledby="contactModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <form id="whatsappForm{{ paquete.idPaquete }}" action="{{ url_for('enviar_whatsapp') }}" method="POST">
+            <input type="hidden" name="id_paquete" value="{{ paquete.idPaquete }}">
+            <div class="modal-header">
+              <h5 class="modal-title" id="contactModalLabel">Seleccionar contactos para WhatsApp</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <p>Seleccione los contactos a los que desea enviar este paquete:</p>
+              
+              <div class="search-box">
+                <input type="text" id="searchContact{{ paquete.idPaquete }}" class="form-control" placeholder="Buscar por nombre o teléfono...">
+              </div>
+              
+              <div class="table-responsive">
+                <table class="table contact-table">
+                  <thead>
+                    <tr>
+                      <th>Seleccionar</th>
+                      <th>Nombre</th>
+                      <th>Teléfono</th>
+                    </tr>
+                  </thead>
+                  <tbody id="contactTableBody{{ paquete.idPaquete }}">
+                    {% for cliente in clientes %}
+                    <tr>
+                      <td>
+                        <input type="checkbox" name="numeros" value="{{ cliente.Telefono }}" 
+                               data-name="{{ cliente.Nombre }}" class="contact-checkbox">
+                      </td>
+                      <td>{{ cliente.Nombre }}</td>
+                      <td>{{ cliente.Telefono }}</td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <span class="selected-count">0 seleccionados</span>
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-whatsapp"></i> Generar enlaces
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<style>
+  .package-container {
+    padding: 20px;
+  }
+
+  .package-card {
+    border: 1px solid #ddd;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    transition: transform 0.2s ease;
+    background-color: white;
+    height: 100%;
+  }
+
+  .package-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+  }
+
+  .package-img {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+  }
+
+  .package-body {
+    padding: 15px;
+  }
+
+  .btn-consultar {
+    background-color: var(--accent-color);
+    color: white;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: background-color 0.2s;
+  }
+
+  .btn-consultar:hover {
+    background-color: var(--secondary-color);
+    color: white;
+  }
+
+  .price {
+    font-size: 1.4rem;
+    color: #2e8b57;
+    font-weight: bold;
+  }
+
+  .acciones {
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  form.inline-form {
+    display: inline;
+  }
+
+  .contact-table th {
+    background-color: #f8f9fa;
+    position: sticky;
+    top: 0;
+  }
+
+  .contact-table tr.selected {
+    background-color: #e2f0fd;
+  }
+
+  .modal-body {
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+
+  .selected-count {
+    margin-left: 10px;
+    font-weight: bold;
+    color: var(--primary-color);
+  }
+
+  .search-box {
+    margin-bottom: 15px;
+  }
+
+  .search-box input {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    width: 100%;
+  }
+
+  /* Estilos para la barra de búsqueda de destino */
+  #buscadorDestino {
+    width: 250px;
+    transition: width 0.3s ease;
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+  }
+
+  #buscadorDestino:focus {
+    width: 300px;
+    border-color: #86b7fe;
+    outline: 0;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+  }
+</style>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Funcionalidad existente para los modales
+    document.querySelectorAll('.contact-checkbox').forEach(checkbox => {
+      checkbox.addEventListener('change', function() {
+        const modal = this.closest('.modal-content');
+        const selectedCount = modal.querySelectorAll('.contact-checkbox:checked').length;
+        modal.querySelector('.selected-count').textContent = selectedCount + ' seleccionados';
+
+        const row = this.closest('tr');
+        row.classList.toggle('selected', this.checked);
+      });
+    });
+
+    // Funcionalidad existente para búsqueda en modales
+    document.querySelectorAll('[id^="searchContact"]').forEach(searchInput => {
+      const modalId = searchInput.id.replace('searchContact', '');
+      const tableBody = document.getElementById('contactTableBody' + modalId);
+
+      searchInput.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase();
+        const rows = tableBody.getElementsByTagName('tr');
+
+        Array.from(rows).forEach(row => {
+          const name = row.cells[1].textContent.toLowerCase();
+          const phone = row.cells[2].textContent.toLowerCase();
+
+          row.style.display = (name.includes(searchTerm) || phone.includes(searchTerm)) ? '' : 'none';
+        });
+      });
+    });
+
+    // Nueva funcionalidad para búsqueda por destino
+    document.getElementById('buscadorDestino').addEventListener('input', function() {
+      const searchTerm = this.value.toLowerCase();
+      const packageCards = document.querySelectorAll('.package-card');
+      
+      packageCards.forEach(card => {
+        // Buscamos el elemento que contiene el texto "Destino:"
+        const destinoElements = Array.from(card.querySelectorAll('p strong')).filter(el => 
+          el.textContent.trim() === 'Destino:'
+        );
+        
+        if (destinoElements.length > 0) {
+          const destinoElement = destinoElements[0];
+          // Obtenemos el nodo de texto siguiente al strong (que contiene el nombre del destino)
+          const destinoText = destinoElement.nextSibling.textContent.toLowerCase().trim();
+          card.closest('.col').style.display = destinoText.includes(searchTerm) ? '' : 'none';
+        }
+      });
+    });
+  });
+</script>
+
+{% endblock %}

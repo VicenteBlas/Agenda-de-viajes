@@ -1,0 +1,392 @@
+{% extends "interfaz_admin.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center pt-3 pb-2 mb-3 border-bottom">
+  <h2 class="dashboard-title">
+    <i class="bi bi-clock text-info"></i>
+    <span>Horas disponibles</span>
+  </h2>
+  <button class="btn btn-info text-white" data-bs-toggle="modal" data-bs-target="#addHoraModal">
+    <i class="bi bi-plus-circle"></i> Nueva Hora
+  </button>
+</div>
+
+<div class="row gy-3" id="horasList">
+  <div class="col-12 text-center">
+    <div class="spinner-border text-primary"></div>
+    <div class="mt-2">Cargando horas...</div>
+  </div>
+</div>
+
+<!-- Modal Agregar -->
+<div class="modal fade" id="addHoraModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Agregar Nueva Hora</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="addHoraForm">
+          <div class="mb-3">
+            <label for="horaInput" class="form-label">Hora</label>
+            <input type="time" class="form-control" id="horaInput" required>
+            <div class="invalid-feedback" id="horaDuplicadaFeedback">
+              Esta hora ya existe en el sistema
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-primary" id="saveHoraBtn">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Editar -->
+<div class="modal fade" id="editHoraModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Editar Hora</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="editHoraForm">
+          <input type="hidden" id="editHoraId">
+          <div class="mb-3">
+            <label for="editHoraInput" class="form-label">Hora</label>
+            <input type="time" class="form-control" id="editHoraInput" required>
+            <div class="invalid-feedback" id="editHoraDuplicadaFeedback">
+              Esta hora ya existe en el sistema
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-primary" id="updateHoraBtn">Actualizar</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+  .hora-card {
+    position: relative;
+    border: 1px solid #e1e1e1;
+    border-radius: 0.75rem;
+    padding: 1rem 1.5rem;
+    background: #fff;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    transition: box-shadow 0.2s;
+  }
+  .hora-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  }
+  .hora-actions {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .hora-card:hover .hora-actions {
+    visibility: visible;
+    opacity: 1;
+  }
+  .was-validated .form-control:invalid {
+    border-color: #dc3545;
+  }
+  .invalid-feedback {
+    display: none;
+    color: #dc3545;
+    font-size: 0.875em;
+  }
+  .was-validated .form-control:invalid ~ .invalid-feedback {
+    display: block;
+  }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  let horasDisponibles = []; // Almacenará todas las horas disponibles
+  
+  // Cargar horas al iniciar
+  cargarHoras();
+
+  async function cargarHoras() {
+    try {
+      const res = await fetch('/api/horas');
+      if (!res.ok) throw new Error('Error al cargar horas');
+      
+      const horas = await res.json();
+      horasDisponibles = horas.map(h => h.Hora); // Guardamos las horas para referencia
+      
+      const list = document.getElementById('horasList');
+      list.innerHTML = '';
+      
+      if (horas.length === 0) {
+        list.innerHTML = `<div class="col-12 text-center text-muted py-4">
+          <i class="bi bi-clock" style="font-size:2rem;"></i>
+          <div>No hay horas registradas</div>
+        </div>`;
+        return;
+      }
+      
+      // Ordenar horas cronológicamente
+      horas.sort((a, b) => {
+        const timeA = new Date(`1970-01-01T${a.Hora}:00`);
+        const timeB = new Date(`1970-01-01T${b.Hora}:00`);
+        return timeA - timeB;
+      });
+      
+      // Mostrar horas ordenadas
+      horas.forEach(hora => {
+        addHoraCard(hora);
+      });
+    } catch (err) {
+      console.error('Error al cargar horas:', err);
+      showToast('Error', 'No se pudieron cargar las horas', true);
+    }
+  }
+
+  function formatHora(horaStr) {
+    const [h, m] = horaStr.split(':');
+    const date = new Date();
+    date.setHours(h, m);
+    return date.toLocaleTimeString('es-ES', { 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      hour12: true 
+    }).toUpperCase();
+  }
+
+  function addHoraCard(hora) {
+    // Si hay un mensaje de "No hay horas", eliminarlo
+    const emptyMessage = document.querySelector('#horasList .text-muted');
+    if (emptyMessage && emptyMessage.textContent.includes('No hay horas')) {
+      emptyMessage.remove();
+    }
+    
+    const div = document.createElement('div');
+    div.className = 'col-12';
+    div.id = `card-hora-${hora.idHora}`;
+    div.innerHTML = `
+      <div class="hora-card">
+        <div class="hora-actions">
+          <button class="btn btn-sm btn-link text-primary" onclick="editarHora(${hora.idHora}, '${hora.Hora}')" title="Editar">
+            <i class="bi bi-pencil-fill"></i>
+          </button>
+          <button class="btn btn-sm btn-link text-danger" onclick="eliminarHora(${hora.idHora})" title="Eliminar">
+            <i class="bi bi-trash-fill"></i>
+          </button>
+        </div>
+        <div><i class="bi bi-clock me-2 text-info"></i> <strong>${formatHora(hora.Hora)}</strong></div>
+        <div class="text-muted small mt-1">Formato 24h: ${hora.Hora}</div>
+      </div>`;
+    document.getElementById('horasList').appendChild(div);
+  }
+
+  window.agregarHora = async function() {
+    const horaInput = document.getElementById('horaInput');
+    const hora = horaInput.value;
+    const form = document.getElementById('addHoraForm');
+    
+    // Validación básica
+    form.classList.add('was-validated');
+    if (!hora) return;
+    
+    try {
+      const res = await fetch('/api/horas', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({Hora: hora})
+      });
+      
+      const data = await res.json();
+      
+      if (data.duplicado) {
+        horaInput.classList.add('is-invalid');
+        return;
+      }
+      
+      if (data.success) {
+        // Agregar la nueva hora a la lista y actualizar UI
+        addHoraCard(data.nuevaHora);
+        horasDisponibles.push(data.nuevaHora.Hora);
+        
+        // Cerrar modal y limpiar formulario
+        bootstrap.Modal.getInstance(document.getElementById('addHoraModal')).hide();
+        form.classList.remove('was-validated');
+        document.getElementById('addHoraForm').reset();
+        
+        showToast('Éxito', 'Hora agregada correctamente');
+      } else {
+        showToast('Error', data.message || 'No se pudo agregar la hora', true);
+      }
+    } catch (err) {
+      console.error('Error al agregar hora:', err);
+      showToast('Error', 'Error al agregar hora', true);
+    }
+  };
+
+  window.editarHora = function(id, hora) {
+    document.getElementById('editHoraId').value = id;
+    const editHoraInput = document.getElementById('editHoraInput');
+    editHoraInput.value = hora;
+    editHoraInput.dataset.original = hora; // Guardar valor original
+    document.getElementById('editHoraForm').classList.remove('was-validated');
+    new bootstrap.Modal(document.getElementById('editHoraModal')).show();
+  };
+
+  window.actualizarHora = async function() {
+    const id = document.getElementById('editHoraId').value;
+    const editHoraInput = document.getElementById('editHoraInput');
+    const nuevaHora = editHoraInput.value;
+    const horaOriginal = editHoraInput.dataset.original;
+    const form = document.getElementById('editHoraForm');
+    
+    form.classList.add('was-validated');
+    if (!nuevaHora) return;
+    
+    // Si no hubo cambios, simplemente cerrar
+    if (nuevaHora === horaOriginal) {
+      bootstrap.Modal.getInstance(document.getElementById('editHoraModal')).hide();
+      return;
+    }
+    
+    try {
+      const res = await fetch(`/api/horas/${id}`, {
+        method: 'PUT',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({Hora: nuevaHora})
+      });
+      
+      const data = await res.json();
+      
+      if (data.duplicado) {
+        editHoraInput.classList.add('is-invalid');
+        return;
+      }
+      
+      if (data.success) {
+        // Actualizar la tarjeta en la UI
+        const card = document.getElementById(`card-hora-${id}`);
+        card.querySelector('strong').innerText = formatHora(data.horaActualizada.Hora);
+        card.querySelector('.text-muted').innerText = `Formato 24h: ${data.horaActualizada.Hora}`;
+        
+        // Actualizar lista de horas disponibles
+        horasDisponibles = horasDisponibles.map(h => 
+          h === horaOriginal ? data.horaActualizada.Hora : h
+        );
+        
+        // Cerrar modal
+        bootstrap.Modal.getInstance(document.getElementById('editHoraModal')).hide();
+        showToast('Éxito', 'Hora actualizada correctamente');
+      } else {
+        showToast('Error', data.message || 'No se pudo actualizar la hora', true);
+      }
+    } catch (err) {
+      console.error('Error al actualizar hora:', err);
+      showToast('Error', 'Error al actualizar hora', true);
+    }
+  };
+
+  window.eliminarHora = async function(id) {
+    if (!confirm('¿Estás seguro de que deseas eliminar esta hora?')) return;
+    
+    try {
+      const res = await fetch(`/api/horas/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      
+      if (data.success) {
+        const card = document.getElementById(`card-hora-${id}`);
+        const horaText = card.querySelector('.text-muted').textContent.replace('Formato 24h: ', '').trim();
+        
+        // Eliminar de la lista de horas disponibles
+        horasDisponibles = horasDisponibles.filter(h => h !== horaText);
+        
+        // Eliminar la tarjeta de la UI
+        card.remove();
+        showToast('Éxito', 'Hora eliminada correctamente');
+        
+        // Mostrar mensaje si no quedan horas
+        if (document.querySelectorAll('.hora-card').length === 0) {
+          const list = document.getElementById('horasList');
+          list.innerHTML = `<div class="col-12 text-center text-muted py-4">
+            <i class="bi bi-clock" style="font-size:2rem;"></i>
+            <div>No hay horas registradas</div>
+          </div>`;
+        }
+      } else {
+        showToast('Error', data.message || 'No se pudo eliminar la hora', true);
+      }
+    } catch (err) {
+      console.error('Error al eliminar hora:', err);
+      showToast('Error', 'Error al eliminar hora', true);
+    }
+  };
+
+  // Event listeners
+  document.getElementById('saveHoraBtn').addEventListener('click', agregarHora);
+  document.getElementById('updateHoraBtn').addEventListener('click', actualizarHora);
+  
+  // Limpiar validación al cerrar modales
+  document.getElementById('addHoraModal').addEventListener('hidden.bs.modal', function() {
+    document.getElementById('addHoraForm').classList.remove('was-validated');
+    document.getElementById('horaInput').classList.remove('is-invalid');
+    document.getElementById('addHoraForm').reset();
+  });
+  
+  document.getElementById('editHoraModal').addEventListener('hidden.bs.modal', function() {
+    document.getElementById('editHoraForm').classList.remove('was-validated');
+    document.getElementById('editHoraInput').classList.remove('is-invalid');
+  });
+});
+
+// Función auxiliar para mostrar notificaciones
+function showToast(title, message, isError = false) {
+  const toastContainer = document.getElementById('toastContainer') || createToastContainer();
+  const toastId = 'toast-' + Date.now();
+  
+  const toast = document.createElement('div');
+  toast.id = toastId;
+  toast.className = `toast align-items-center text-white ${isError ? 'bg-danger' : 'bg-success'}`;
+  toast.setAttribute('role', 'alert');
+  toast.setAttribute('aria-live', 'assertive');
+  toast.setAttribute('aria-atomic', 'true');
+  toast.innerHTML = `
+    <div class="d-flex">
+      <div class="toast-body">
+        <strong>${title}</strong><br>${message}
+      </div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  `;
+  
+  toastContainer.appendChild(toast);
+  const bsToast = new bootstrap.Toast(toast);
+  bsToast.show();
+  
+  // Eliminar el toast después de ocultarse
+  toast.addEventListener('hidden.bs.toast', function() {
+    toast.remove();
+  });
+}
+
+function createToastContainer() {
+  const container = document.createElement('div');
+  container.id = 'toastContainer';
+  container.className = 'position-fixed bottom-0 end-0 p-3';
+  container.style.zIndex = '11';
+  document.body.appendChild(container);
+  return container;
+}
+</script>
+{% endblock %}

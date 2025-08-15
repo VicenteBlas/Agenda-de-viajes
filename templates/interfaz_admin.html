@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel Admin | VB Corporativo</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@4.1.1/animate.min.css">
+  <style>
+    :root {
+      --primary-color: #4361ee;
+      --primary-light: #eef2ff;
+      --secondary-color: #3f37c9;
+      --accent-color: #4895ef;
+      --light-color: #f8f9fa;
+      --dark-color: #212529;
+      --success-color: #4cc9f0;
+      --danger-color: #f72585;
+      --warning-color: #f8961e;
+      --sidebar-width: 280px;
+      --transition-speed: 0.3s;
+    }
+    
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      overflow-x: hidden;
+    }
+    
+    .admin-container {
+      display: grid;
+      grid-template-columns: var(--sidebar-width) 1fr;
+      min-height: 100vh;
+    }
+    
+    /* Sidebar estático */
+    .sidebar {
+      background: linear-gradient(160deg, var(--primary-color), var(--secondary-color));
+      color: white;
+      padding: 1.5rem 0;
+      position: relative;
+      z-index: 100;
+      box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+      width: var(--sidebar-width);
+    }
+    
+    .sidebar-header {
+      padding: 0 1.5rem 1.5rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .sidebar-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 1.25rem;
+      font-weight: bold;
+    }
+    
+    .sidebar-logo img {
+      height: 40px;
+      border-radius: 50%;
+      background: white;
+      padding: 3px;
+      transition: transform 0.5s ease;
+    }
+    
+    .sidebar-logo:hover img {
+      transform: rotate(360deg);
+    }
+    
+    .nav-menu {
+      padding: 0 1.5rem;
+    }
+    
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0.8rem 1.5rem;
+      color: rgba(255, 255, 255, 0.9);
+      text-decoration: none;
+      border-left: 4px solid transparent;
+      transition: all var(--transition-speed) ease;
+      font-weight: 500;
+      border-radius: 6px;
+      margin: 0.25rem 0;
+    }
+    
+    .nav-link:hover {
+      background-color: rgba(255, 255, 255, 0.15);
+      border-left: 4px solid white;
+      color: white;
+      transform: translateX(5px);
+    }
+    
+    .nav-link.active {
+      background-color: rgba(255, 255, 255, 0.2);
+      border-left: 4px solid white;
+      color: white;
+      font-weight: 600;
+    }
+    
+    .nav-link i {
+      font-size: 1.1rem;
+      min-width: 24px;
+      text-align: center;
+    }
+    
+    /* Contenido principal */
+    .main-content {
+      padding: 2rem;
+      background-color: #f5f7fa;
+      position: relative;
+      min-height: 100vh;
+    }
+    
+    /* Encabezado del dashboard */
+    .dashboard-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+      animation: fadeInDown 0.5s;
+      gap: 1rem;
+    }
+    
+    .dashboard-header-content {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    
+    .dashboard-title {
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 600;
+      color: var(--dark-color);
+    }
+    
+    .dashboard-title span:first-child {
+      font-size: 1.8rem;
+    }
+    
+    /* Botón de actualización */
+    .refresh-btn {
+      background-color: var(--primary-color);
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    }
+    
+    .refresh-btn:hover {
+      background-color: var(--secondary-color);
+      transform: rotate(180deg);
+    }
+    
+    .refresh-btn:active {
+      transform: scale(0.95) rotate(180deg);
+    }
+    
+    .refresh-btn.loading {
+      animation: spin 1s infinite linear;
+    }
+    
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    
+    /* Tarjetas del dashboard */
+    .dashboard-columns {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+      animation: fadeIn 0.8s;
+    }
+    
+    .dashboard-card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+      padding: 1.5rem;
+      transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+      border: 1px solid rgba(0, 0, 0, 0.03);
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .dashboard-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      background: var(--primary-color);
+      transition: width 0.3s ease;
+    }
+    
+    .dashboard-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    }
+    
+    .dashboard-card:hover::before {
+      width: 8px;
+    }
+    
+    .card-title {
+      margin-top: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 1.1rem;
+      color: var(--dark-color);
+    }
+    
+    .card-title i {
+      font-size: 1.3rem;
+    }
+    
+    .stat-number {
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin: 1rem 0 0.5rem;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: linear-gradient(to right, var(--primary-color), var(--accent-color));
+      display: inline-block;
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      color: transparent;
+    }
+    
+    .stat-label {
+      color: #6c757d;
+      margin-bottom: 1.5rem;
+      font-size: 0.9rem;
+    }
+    
+    /* Listas recientes */
+    .recent-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    
+    .recent-item {
+      padding: 0.75rem 0;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: background-color 0.2s ease;
+    }
+    
+    .recent-item:hover {
+      background-color: var(--primary-light);
+    }
+    
+    .recent-item:last-child {
+      border-bottom: none;
+    }
+    
+    /* Avatar */
+    .avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      flex-shrink: 0;
+      font-size: 0.9rem;
+    }
+    
+    /* Notificaciones toast */
+    .toast-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 1100;
+    }
+    
+    .toast {
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      border: none;
+    }
+    
+    .toast-header {
+      border-radius: 8px 8px 0 0 !important;
+      font-weight: 600;
+    }
+    
+    /* Botones */
+    .btn {
+      border-radius: 6px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      padding: 0.5rem 1rem;
+    }
+    
+    .btn-outline-primary {
+      border-color: var(--primary-color);
+      color: var(--primary-color);
+    }
+    
+    .btn-outline-primary:hover {
+      background-color: var(--primary-color);
+      color: white;
+    }
+    
+    /* Efecto de carga */
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .loading-item {
+      animation: pulse 1.5s infinite ease-in-out;
+    }
+    
+    /* Efecto de skeleton */
+    .skeleton {
+      background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite linear;
+      border-radius: 4px;
+      color: transparent !important;
+    }
+    
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    
+    /* Animaciones personalizadas */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    @keyframes fadeInDown {
+      from { opacity: 0; transform: translateY(-20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .animate-fade-in {
+      animation: fadeIn 0.5s ease-out forwards;
+    }
+    
+    .delay-1 { animation-delay: 0.1s; }
+    .delay-2 { animation-delay: 0.2s; }
+    .delay-3 { animation-delay: 0.3s; }
+
+    /* ===========================
+       Estilos para FullCalendar - MODIFICADO
+       =========================== */
+    /* Contenedor principal del calendario */
+    .fc .fc-view-harness {
+      overflow: hidden !important; /* Elimina las barras de desplazamiento */
+    }
+
+    /* Cabecera del calendario */
+    .fc .fc-toolbar {
+      padding: 0 0.5rem; /* Reduce el padding para ahorrar espacio */
+    }
+
+    /* Días de la semana */
+    .fc .fc-col-header-cell {
+      padding: 0.5rem 0; /* Reduce el padding vertical */
+    }
+
+    /* Celdas de los días */
+    .fc .fc-daygrid-day-frame {
+      min-height: auto !important; /* Elimina altura fija */
+      padding: 0.3rem !important; /* Reduce el padding */
+    }
+
+    /* Número del día */
+    .fc .fc-daygrid-day-number {
+      padding: 0.2rem !important; /* Reduce el padding */
+      font-size: 0.9rem; /* Reduce ligeramente el tamaño de fuente */
+    }
+
+    /* Día seleccionado - NUEVO ESTILO CON RECUADRO VERDE */
+    .fc-daygrid-day.fc-day-selected {
+      background-color: rgba(40, 167, 69, 0.1) !important;
+      border: 2px solid #4CAF50 !important;
+      border-radius: 8px;
+      box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.3);
+    }
+
+    .fc-daygrid-day.fc-day-selected .fc-daygrid-day-number {
+      color: #218838 !important;
+      font-weight: bold;
+    }
+
+    /* Días con eventos */
+    .fc-daygrid-day.fc-day-with-event {
+      position: relative;
+      cursor: pointer;
+    }
+
+    .fc-daygrid-day.fc-day-with-event .fc-daygrid-day-frame::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 36px;
+      height: 36px;
+      background-color: rgba(40, 167, 69, 0.1);
+      border-radius: 50%;
+      z-index: -1;
+      transition: background-color 0.3s ease;
+    }
+
+    .fc-daygrid-day.fc-day-with-event:hover .fc-daygrid-day-frame::before {
+      background-color: rgba(40, 167, 69, 0.2);
+    }
+
+    .fc-daygrid-day.fc-day-with-event .fc-daygrid-day-number {
+      font-weight: bold;
+      color: #28a745;
+      transition: color 0.3s ease;
+    }
+
+    .fc-daygrid-day.fc-day-with-event:hover .fc-daygrid-day-number {
+      color: #218838;
+    }
+
+    /* Eventos (ocultos visualmente pero funcionales) */
+    .fc-daygrid-event {
+      padding: 0 !important;
+      border-radius: 0 !important;
+      height: 100% !important;
+      line-height: 1;
+      font-size: 0 !important;
+      cursor: pointer;
+      background-color: transparent !important;
+      border: none !important;
+    }
+
+    .fc-event-main {
+      display: none;
+    }
+
+    /* Botones del calendario */
+    .fc .fc-button {
+      background-color: #f8f9fa;
+      border: 1px solid #ddd !important;
+      color: #333 !important;
+      transition: all 0.3s ease;
+      box-shadow: none !important;
+      text-transform: capitalize;
+    }
+
+    .fc .fc-button:hover {
+      background-color: #e9ecef !important;
+    }
+
+    .fc .fc-button-primary:not(:disabled).fc-button-active {
+      background-color: #e9ecef !important;
+      color: #333 !important;
+    }
+
+    .fc-today-button {
+      background-color: #28a745 !important;
+      color: white !important;
+      border: none !important;
+    }
+
+    .fc-today-button:hover {
+      background-color: #218838 !important;
+    }
+
+    /* Cabecera del calendario */
+    .fc .fc-toolbar-title {
+      font-size: 1.4em;
+      color: #333;
+      font-weight: 600;
+    }
+
+    /* Días de la semana */
+    .fc .fc-col-header-cell-cushion {
+      color: #333;
+      font-weight: 500;
+      padding: 8px 4px;
+    }
+
+    /* Celda del día */
+    .fc .fc-daygrid-day-frame {
+      padding: 4px;
+    }
+
+    /* Día actual */
+    .fc .fc-daygrid-day.fc-day-today {
+      background-color: rgba(40, 167, 69, 0.05);
+    }
+
+    /* Efecto hover para todas las celdas */
+    .fc .fc-daygrid-day:hover {
+      background-color: rgba(0, 0, 0, 0.02);
+    }
+    
+    /* Responsive para móviles */
+    @media (max-width: 768px) {
+      .admin-container {
+        grid-template-columns: 1fr;
+      }
+      
+      .sidebar {
+        width: 100%;
+        padding: 1rem 0;
+      }
+      
+      .dashboard-columns {
+        grid-template-columns: 1fr;
+      }
+      
+      .dashboard-card {
+        padding: 1.25rem;
+      }
+      
+      .main-content {
+        padding: 1.5rem;
+      }
+    }
+    
+    @media (max-width: 576px) {
+      .dashboard-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+      }
+      
+      .refresh-btn {
+        align-self: flex-end;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="admin-container">
+    <!-- Sidebar Navigation -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">
+          <img src="{{ url_for('static', filename='img/Pudin.png') }}" alt="Logo">
+          <span>vbcorporativo</span>
+        </div>
+      </div>
+      
+      <div class="nav-menu">
+        <h4 class="text-white ps-3 mb-3">Panel Admin</h4>
+        <a href="/interfaz_admin" class="nav-link {{ 'active' if request.path == '/interfaz_admin' }}">
+          <i class="bi bi-speedometer2"></i>
+          <span>Resumen General</span>
+        </a>
+        <a href="/admin/fechas" class="nav-link {{ 'active' if request.path == '/admin/fechas' }}">
+          <i class="bi bi-calendar-event"></i>
+          <span>Fechas agendadas</span>
+        </a>
+        <a href="/admin/horas" class="nav-link {{ 'active' if request.path == '/admin/horas' }}">
+          <i class="bi bi-clock"></i>
+          <span>Horas disponibles</span>
+        </a>
+        <a href="/admin/clientes" class="nav-link {{ 'active' if request.path == '/admin/clientes' }}">
+          <i class="bi bi-people"></i>
+          <span>Clientes</span>
+        </a>
+        <a href="/Pack" class="nav-link {{ 'active' if request.path == '/Pack' }}">
+          <i class="bi bi-box-seam"></i>
+          <span>Paquetes</span>
+        </a>
+        <a href="/" class="nav-link">
+          <i class="bi bi-arrow-left-circle"></i>
+          <span>Volver al inicio</span>
+        </a>
+      </div>
+    </div>
+    
+    <!-- Main Content Area -->
+    <div class="main-content">
+      {% block content %}
+        <!-- Vista del Dashboard -->
+        <div class="dashboard-header">
+          <div class="dashboard-header-content">
+            <h2 class="dashboard-title">
+              <span>📊</span>
+              <span>Panel de Administración</span>
+            </h2>
+            <div class="text-muted">Resumen general del sistema</div>
+          </div>
+          <button id="refresh-btn" class="refresh-btn" title="Actualizar datos">
+            <i class="bi bi-arrow-clockwise"></i>
+          </button>
+        </div>
+        
+        <div class="dashboard-columns">
+          <!-- Column 1: Resumen de Fechas -->
+          <div class="dashboard-card animate-fade-in delay-1">
+            <h3 class="card-title">
+              <i class="bi bi-calendar-check text-primary"></i>
+              Fechas Agendadas
+            </h3>
+            <div class="stat-number text-primary" id="fechas-count">
+              <span class="skeleton" style="display: inline-block; width: 80px;">&nbsp;</span>
+            </div>
+            <div class="stat-label">fechas registradas</div>
+            <h5 class="mt-4">Próximas fechas:</h5>
+            <ul class="recent-list" id="proximas-fechas">
+              <li class="recent-item loading-item">
+                <i class="bi bi-calendar3 text-primary"></i>
+                <div>
+                  <div class="skeleton" style="width: 120px;">&nbsp;</div>
+                  <small class="skeleton" style="width: 80px; display: inline-block;">&nbsp;</small>
+                </div>
+              </li>
+              <li class="recent-item loading-item">
+                <i class="bi bi-calendar3 text-primary"></i>
+                <div>
+                  <div class="skeleton" style="width: 100px;">&nbsp;</div>
+                  <small class="skeleton" style="width: 70px; display: inline-block;">&nbsp;</small>
+                </div>
+              </li>
+            </ul>
+            <a href="/admin/fechas" class="btn btn-outline-primary mt-3 w-100">
+              <i class="bi bi-arrow-right"></i> Gestionar fechas
+            </a>
+          </div>
+          
+          <!-- Column 2: Resumen de Horas -->
+          <div class="dashboard-card animate-fade-in delay-2">
+            <h3 class="card-title">
+              <i class="bi bi-clock-history text-info"></i>
+              Horas Disponibles
+            </h3>
+            <div class="stat-number text-info" id="horas-count">
+              <span class="skeleton" style="display: inline-block; width: 60px;">&nbsp;</span>
+            </div>
+            <div class="stat-label">horas registradas</div>
+            <h5 class="mt-4">Horas recientes:</h5>
+            <ul class="recent-list" id="recientes-horas">
+              <li class="recent-item loading-item">
+                <i class="bi bi-clock text-info"></i>
+                <div>
+                  <div class="skeleton" style="width: 80px;">&nbsp;</div>
+                  <small class="skeleton" style="width: 120px; display: inline-block;">&nbsp;</small>
+                </div>
+              </li>
+              <li class="recent-item loading-item">
+                <i class="bi bi-clock text-info"></i>
+                <div>
+                  <div class="skeleton" style="width: 70px;">&nbsp;</div>
+                  <small class="skeleton" style="width: 110px; display: inline-block;">&nbsp;</small>
+                </div>
+              </li>
+            </ul>
+            <a href="/admin/horas" class="btn btn-outline-info mt-3 w-100">
+              <i class="bi bi-arrow-right"></i> Gestionar horas
+            </a>
+          </div>
+          
+          <!-- Column 3: Resumen de Clientes -->
+          <div class="dashboard-card animate-fade-in delay-3">
+            <h3 class="card-title">
+              <i class="bi bi-people-fill text-warning"></i>
+              Clientes Registrados
+            </h3>
+            <div class="stat-number text-warning" id="clientes-count">
+              <span class="skeleton" style="display: inline-block; width: 50px;">&nbsp;</span>
+            </div>
+            <div class="stat-label">clientes registrados</div>
+            <h5 class="mt-4">Clientes recientes:</h5>
+            <ul class="recent-list" id="recientes-clientes">
+              <li class="recent-item loading-item">
+                <div class="avatar skeleton">&nbsp;</div>
+                <div>
+                  <div class="skeleton" style="width: 150px;">&nbsp;</div>
+                  <small class="skeleton" style="width: 180px; display: inline-block;">&nbsp;</small>
+                </div>
+              </li>
+              <li class="recent-item loading-item">
+                <div class="avatar skeleton">&nbsp;</div>
+                <div>
+                  <div class="skeleton" style="width: 130px;">&nbsp;</div>
+                  <small class="skeleton" style="width: 160px; display: inline-block;">&nbsp;</small>
+                </div>
+              </li>
+            </ul>
+            <a href="/admin/clientes" class="btn btn-outline-warning mt-3 w-100">
+              <i class="bi bi-arrow-right"></i> Gestionar clientes
+            </a>
+          </div>
+        </div>
+      {% endblock %}
+    </div>
+  </div>
+
+  <!-- Toast Notifications -->
+  <div class="toast-container">
+    <div id="liveToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+      <div class="toast-header bg-primary text-white">
+        <strong class="me-auto" id="toast-title">Notificación</strong>
+        <small>Ahora</small>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+      </div>
+      <div class="toast-body" id="toast-message"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Toast notifications
+      const toastLive = document.getElementById('liveToast');
+      const toastBootstrap = bootstrap.Toast.getOrCreateInstance(toastLive);
+      
+      function showToast(title, message, type = 'info') {
+        const toastHeader = document.querySelector('.toast-header');
+        const toastTitle = document.getElementById('toast-title');
+        const toastMessage = document.getElementById('toast-message');
+        
+        // Reset classes
+        toastHeader.className = 'toast-header';
+        toastHeader.classList.add('text-white');
+        
+        // Set type-specific styles
+        switch(type) {
+          case 'success':
+            toastHeader.classList.add('bg-success');
+            break;
+          case 'error':
+            toastHeader.classList.add('bg-danger');
+            break;
+          case 'warning':
+            toastHeader.classList.add('bg-warning');
+            break;
+          default:
+            toastHeader.classList.add('bg-primary');
+        }
+        
+        toastTitle.textContent = title;
+        toastMessage.textContent = message;
+        
+        // Show time
+        const timeEl = toastHeader.querySelector('small');
+        const now = new Date();
+        timeEl.textContent = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+        
+        toastBootstrap.show();
+      }
+      
+      // Elementos del DOM
+      const refreshBtn = document.getElementById('refresh-btn');
+      
+      // Función para mostrar estado de carga
+      function setLoadingState(isLoading) {
+        if (isLoading) {
+          refreshBtn.classList.add('loading');
+          refreshBtn.disabled = true;
+        } else {
+          refreshBtn.classList.remove('loading');
+          refreshBtn.disabled = false;
+        }
+      }
+      
+      // Evento para el botón de actualización
+      refreshBtn.addEventListener('click', function() {
+        setLoadingState(true);
+        cargarEstadisticas()
+          .finally(() => {
+            setLoadingState(false);
+            showToast('Actualizado', 'Datos actualizados correctamente', 'success');
+          });
+      });
+      
+      // Format date with animation
+      function formatFecha(fechaStr) {
+        const fecha = new Date(fechaStr);
+        const opciones = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+        return {
+          fechaCompleta: fecha.toLocaleDateString('es-ES', opciones),
+          diaSemana: fecha.toLocaleDateString('es-ES', { weekday: 'long' }),
+          fechaCorta: fecha.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
+        };
+      }
+      
+      // Format time with animation
+      function formatHora(horaStr) {
+        const [horas, minutos] = horaStr.split(':');
+        const hora = new Date();
+        hora.setHours(horas, minutos);
+        
+        return {
+          hora24: horaStr,
+          hora12: hora.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: true })
+        };
+      }
+      
+      // Animated counter
+      function animateCounter(element, target, duration = 1000) {
+        const start = 0;
+        const increment = target / (duration / 16);
+        let current = start;
+        
+        const timer = setInterval(() => {
+          current += increment;
+          if (current >= target) {
+            clearInterval(timer);
+            current = target;
+          }
+          element.textContent = Math.floor(current).toLocaleString();
+        }, 16);
+      }
+      
+      // Load dashboard statistics with smooth animations
+      async function cargarEstadisticas() {
+        try {
+          // Show loading states
+          document.querySelectorAll('.loading-item').forEach(item => {
+            item.classList.add('loading-item');
+          });
+          
+          // Load counts with Promise.all for better performance
+          const [resFechas, resHoras, resClientes] = await Promise.all([
+            fetch('/api/fechas/count').then(res => res.json()),
+            fetch('/api/horas/count').then(res => res.json()),
+            fetch('/api/clientes/count').then(res => res.json())
+          ]);
+          
+          // Animate counters
+          animateCounter(document.getElementById('fechas-count'), resFechas.count);
+          animateCounter(document.getElementById('horas-count'), resHoras.count);
+          animateCounter(document.getElementById('clientes-count'), resClientes.count);
+          
+          // Load recent data
+          const [proxFechas, horasRec, clientesRec] = await Promise.all([
+            fetch('/api/fechas/proximas').then(res => res.json()),
+            fetch('/api/horas/recientes').then(res => res.json()),
+            fetch('/api/clientes/recientes').then(res => res.json())
+          ]);
+          
+          // Render with animations
+          renderProxFechas(proxFechas);
+          renderHorasRec(horasRec);
+          renderClientesRec(clientesRec);
+          
+          // Remove loading states
+          document.querySelectorAll('.loading-item').forEach(item => {
+            item.classList.remove('loading-item');
+          });
+          
+        } catch (error) {
+          console.error('Error al cargar estadísticas:', error);
+          showToast('Error', 'No se pudieron cargar los datos', 'error');
+          throw error;
+        }
+      }
+      
+      // Render upcoming dates with animation
+      function renderProxFechas(fechas) {
+        const container = document.getElementById('proximas-fechas');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        if (fechas.length === 0) {
+          container.innerHTML = '<li class="text-muted">No hay fechas próximas</li>';
+          return;
+        }
+        
+        fechas.forEach((fecha, index) => {
+          const formatted = formatFecha(fecha.Fecha);
+          const li = document.createElement('li');
+          li.className = 'recent-item animate-fade-in';
+          li.style.animationDelay = `${index * 0.1}s`;
+          li.innerHTML = `
+            <i class="bi bi-calendar3 text-primary"></i>
+            <div>
+              <div>${formatted.fechaCorta}</div>
+              <small class="text-muted">${formatted.diaSemana}</small>
+            </div>
+          `;
+          container.appendChild(li);
+        });
+      }
+      
+      // Render recent hours with animation
+      function renderHorasRec(horas) {
+        const container = document.getElementById('recientes-horas');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        if (horas.length === 0) {
+          container.innerHTML = '<li class="text-muted">No hay horas registradas</li>';
+          return;
+        }
+        
+        horas.forEach((hora, index) => {
+          const formatted = formatHora(hora.Hora);
+          const li = document.createElement('li');
+          li.className = 'recent-item animate-fade-in';
+          li.style.animationDelay = `${index * 0.1}s`;
+          li.innerHTML = `
+            <i class="bi bi-clock text-info"></i>
+            <div>
+              <div>${formatted.hora12}</div>
+              <small class="text-muted">Formato 24h: ${formatted.hora24}</small>
+            </div>
+          `;
+          container.appendChild(li);
+        });
+      }
+      
+      // Render recent clients with animation
+      function renderClientesRec(clientes) {
+        const container = document.getElementById('recientes-clientes');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        if (clientes.length === 0) {
+          container.innerHTML = '<li class="text-muted">No hay clientes registrados</li>';
+          return;
+        }
+        
+        clientes.forEach((cliente, index) => {
+          const iniciales = cliente.nombre.charAt(0) + (cliente.apellido_p ? cliente.apellido_p.charAt(0) : '');
+          const li = document.createElement('li');
+          li.className = 'recent-item animate-fade-in';
+          li.style.animationDelay = `${index * 0.1}s`;
+          li.innerHTML = `
+            <div class="avatar">${iniciales}</div>
+            <div>
+              <div>${cliente.nombre} ${cliente.apellido_p}</div>
+              <small class="text-muted">${cliente.email}</small>
+            </div>
+          `;
+          container.appendChild(li);
+        });
+      }
+      
+      // Load dashboard if we're on the main page
+      if (window.location.pathname === '/interfaz_admin' || window.location.pathname === '/') {
+        // Small delay to allow CSS animations to play
+        setTimeout(() => {
+          cargarEstadisticas();
+        }, 300);
+      }
+    });
+  </script>
+  
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Detalles de la Sesión</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f4f4f8;
+      padding: 15px;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+    }
+
+    .container {
+      background-color: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      width: 100%;
+      max-width: 100%;
+      overflow: hidden;
+    }
+
+    .profile {
+      background-color: #2c3e50;
+      color: white;
+      padding: 20px 15px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    .profile h1 {
+      font-size: 16px;
+      margin-bottom: 12px;
+    }
+
+    .profile img {
+      width: 100px;
+      height: 100px;
+      object-fit: cover;
+      border-radius: 50%;
+      border: 3px solid white;
+      margin-bottom: 12px;
+    }
+
+    .profile h2 {
+      font-size: 18px;
+      margin-bottom: 12px;
+    }
+
+    .session-info {
+      font-size: 14px;
+    }
+
+    .session-info p {
+      margin: 6px 0;
+    }
+
+    .session-info p strong {
+      font-size: 14px;
+    }
+
+    .session-details {
+      padding: 20px 15px;
+      background-color: #fafafa;
+    }
+
+    form {
+      margin-top: 10px;
+    }
+
+    .form-group {
+      margin-bottom: 12px;
+    }
+
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 5px;
+      color: #333;
+      font-size: 14px;
+    }
+
+    input,
+    select {
+      width: 100%;
+      padding: 10px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+      background-color: #fff;
+    }
+
+    .submit-btn {
+      margin-top: 15px;
+      padding: 12px;
+      font-size: 16px;
+      background-color: #2c3e50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      width: 100%;
+    }
+
+    /* Media Queries para tablets */
+    @media (min-width: 480px) {
+      .profile img {
+        width: 120px;
+        height: 120px;
+      }
+      
+      .profile h1 {
+        font-size: 18px;
+      }
+      
+      .profile h2 {
+        font-size: 20px;
+      }
+      
+      .session-info {
+        font-size: 16px;
+      }
+    }
+
+    /* Media Queries para pantallas grandes */
+    @media (min-width: 768px) {
+      body {
+        padding: 30px;
+      }
+      
+      .container {
+        display: flex;
+        flex-direction: row;
+        max-width: 900px;
+      }
+      
+      .profile {
+        width: 35%;
+        padding: 30px;
+      }
+      
+      .session-details {
+        width: 65%;
+        padding: 30px;
+      }
+      
+      .profile h1 {
+        font-size: 20px;
+      }
+      
+      .profile img {
+        width: 150px;
+        height: 150px;
+      }
+      
+      .profile h2 {
+        font-size: 24px;
+      }
+      
+      form {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+      
+      .form-group-full {
+        grid-column: span 2;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="profile">
+      <h1>Travel Agent Info Session</h1>
+      <img src="{{ url_for('static', filename='img/Pudin.png') }}" alt="Vicente Blas Photo">
+      <h2>Vicente Blas</h2>
+
+      <div class="session-info">
+        <p>⏳ <strong>1 hr</strong></p>
+        <p>📅 <strong>{{ fecha }} - {{ hora }}</strong></p>
+        <p>🌎 <strong>Zona horaria local</strong></p>
+      </div>
+    </div>
+
+    <div class="session-details">
+      <form action="{{ url_for('guardar_cliente') }}" method="POST">
+        <div class="form-group">
+          <label for="nombre">Nombre</label>
+          <input type="text" id="nombre" name="nombre" required>
+        </div>
+        
+        <div class="form-group">
+          <label for="apellidoP">Apellido Paterno</label>
+          <input type="text" id="apellidoP" name="apellidoP" required>
+        </div>
+        
+        <div class="form-group">
+          <label for="apellidoM">Apellido Materno</label>
+          <input type="text" id="apellidoM" name="apellidoM">
+        </div>
+        
+        <div class="form-group">
+          <label for="telefono">Teléfono (con clave de país)</label>
+          <input type="tel" id="telefono" name="telefono" required>
+        </div>
+        
+        <div class="form-group form-group-full">
+          <label for="pais">País</label>
+          <input type="text" id="pais" name="pais" list="lista-paises" required>
+          <datalist id="lista-paises"></datalist>
+        </div>
+        
+        <div class="form-group form-group-full">
+          <label for="email">Correo electrónico</label>
+          <input type="email" id="email" name="email" placeholder="tucorreo@ejemplo.com" required>
+        </div>
+        
+        <div class="form-group form-group-full">
+          <label for="tipo">¿Qué tipo de cliente eres?</label>
+          <select id="tipo" name="tipo" required>
+            <option value="">Selecciona una opción</option>
+            <option value="Agente de viajes">Agente de viajes</option>
+            <option value="Cotizador">Cotización</option>
+          </select>
+        </div>
+
+        <!-- Campos ocultos para fecha y hora -->
+        <input type="hidden" name="fecha" value="{{ fecha }}">
+        <input type="hidden" name="hora" value="{{ hora }}">
+
+        <button type="submit" class="submit-btn">Enviar</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const paises = Intl.supportedValuesOf('region');
+    const nombres = new Intl.DisplayNames(['es'], { type: 'region' });
+    const datalist = document.getElementById('lista-paises');
+
+    paises.forEach(codigo => {
+      const option = document.createElement('option');
+      option.value = nombres.of(codigo);
+      datalist.appendChild(option);
+    });
+  </script>
+</body>
+</html>

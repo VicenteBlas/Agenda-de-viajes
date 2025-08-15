@@ -1,0 +1,416 @@
+{% extends "interfaz_admin.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center pt-3 pb-2 mb-3 border-bottom">
+  <h2 class="dashboard-title">
+    <i class="bi bi-calendar-event text-primary"></i>
+    <span>Dias para sesiones informativas disponibles</span>
+  </h2>
+  <button class="btn btn-info text-white" data-bs-toggle="modal" data-bs-target="#addFechaModal">
+    <i class="bi bi-plus-circle"></i> Nueva Fecha
+  </button>
+</div>
+
+<div class="row gy-3" id="fechasList">
+  <div class="col-12 text-center fade-in">
+    <div class="spinner-border text-primary"></div>
+    <div class="mt-2">Cargando fechas...</div>
+  </div>
+</div>
+
+<!-- Modal Agregar -->
+<div class="modal fade" id="addFechaModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Agregar Nueva Fecha</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="addFechaForm">
+          <div class="mb-3">
+            <label for="fechaInput" class="form-label">Fecha</label>
+            <input type="date" class="form-control" id="fechaInput" required>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-primary" id="saveFechaBtn">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Editar -->
+<div class="modal fade" id="editFechaModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Editar Fecha</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="editFechaForm">
+          <input type="hidden" id="editFechaId">
+          <div class="mb-3">
+            <label for="editFechaInput" class="form-label">Fecha</label>
+            <input type="date" class="form-control" id="editFechaInput" required>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-primary" id="updateFechaBtn">Actualizar</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+  .fecha-card {
+    position: relative;
+    border: 1px solid #e1e1e1;
+    border-radius: 0.75rem;
+    padding: 1rem 1.5rem;
+    background: #fff;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    transition: box-shadow 0.3s, transform 0.3s;
+    opacity: 0;
+    transform: translateY(10px);
+    animation: fadeInUp 0.5s forwards;
+  }
+  .fecha-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+  }
+  .fecha-actions {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .fecha-card:hover .fecha-actions {
+    visibility: visible;
+    opacity: 1;
+  }
+  @keyframes fadeInUp {
+    to { opacity:1; transform: translateY(0); }
+  }
+  .fade-in { animation: fadeInUp 0.5s forwards; }
+  .fade-out {
+    animation: fadeOut 0.3s forwards;
+  }
+  @keyframes fadeOut {
+    to { opacity: 0; transform: translateY(10px); }
+  }
+  .fecha-hoy {
+    border: 2px solid #0d6efd;
+    background-color: rgba(13, 110, 253, 0.05);
+  }
+  .toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1100;
+  }
+</style>
+
+<div class="toast-container">
+  <div id="liveToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="toast-header">
+      <strong class="me-auto" id="toast-title">Notification</strong>
+      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+    <div class="toast-body" id="toast-message">
+      Hello, world! This is a toast message.
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Establecer fecha mínima en los inputs de fecha
+  const hoy = new Date().toISOString().split('T')[0];
+  document.getElementById('fechaInput').min = hoy;
+  document.getElementById('editFechaInput').min = hoy;
+
+  // Inicializar toast
+  const toastEl = document.getElementById('liveToast');
+  const toast = new bootstrap.Toast(toastEl, { autohide: true, delay: 3000 });
+
+  function showToast(title, message, isError = false) {
+    document.getElementById('toast-title').textContent = title;
+    document.getElementById('toast-message').textContent = message;
+    
+    const toastHeader = toastEl.querySelector('.toast-header');
+    if (isError) {
+      toastHeader.classList.add('bg-danger', 'text-white');
+      toastHeader.classList.remove('bg-success', 'bg-primary');
+    } else {
+      toastHeader.classList.add('bg-success', 'text-white');
+      toastHeader.classList.remove('bg-danger', 'bg-primary');
+    }
+    
+    toast.show();
+  }
+
+  cargarFechas();
+
+  async function cargarFechas() {
+    try {
+      const res = await fetch('/api/fechas');
+      if (!res.ok) throw new Error('Error al cargar fechas');
+      
+      const fechas = await res.json();
+      const list = document.getElementById('fechasList');
+      list.innerHTML = '';
+      
+      if (fechas.length === 0) {
+        list.innerHTML = `<div class="col-12 text-center text-muted py-4 fade-in">
+          <i class="bi bi-calendar-x" style="font-size:2rem;"></i>
+          <div>No hay fechas registradas</div>
+        </div>`;
+        return;
+      }
+      
+      // Ordenar fechas de más cercana a más lejana
+      fechas.sort((a, b) => new Date(a.Fecha) - new Date(b.Fecha));
+      
+      fechas.forEach((fecha, index) => {
+        setTimeout(() => addFechaCard(fecha), index * 50); // efecto escalonado
+      });
+    } catch (err) {
+      console.error('Error:', err);
+      document.getElementById('fechasList').innerHTML = `
+        <div class="col-12 text-center text-danger py-4 fade-in">
+          <i class="bi bi-exclamation-triangle-fill" style="font-size:2rem;"></i>
+          <div>Error al cargar las fechas</div>
+          <button class="btn btn-sm btn-outline-primary mt-2" onclick="location.reload()">Reintentar</button>
+        </div>`;
+    }
+  }
+
+  function formatFecha(fechaStr) {
+    const fecha = new Date(fechaStr+'T00:00:00');
+    const texto = fecha.toLocaleDateString('es-ES', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+    return texto.charAt(0).toUpperCase() + texto.slice(1);
+  }
+
+  function addFechaCard(fecha) {
+    const fechaObj = new Date(fecha.Fecha+'T00:00:00');
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    
+    const esHoy = fechaObj.getTime() === hoy.getTime();
+    
+    const div = document.createElement('div');
+    div.className = 'col-12 fade-in';
+    div.id = `card-${fecha.idFechas}`;
+    div.innerHTML = `
+      <div class="fecha-card ${esHoy ? 'fecha-hoy' : ''}">
+        <div class="fecha-actions">
+          <button class="btn btn-sm btn-link text-primary" onclick="editarFecha(${fecha.idFechas}, '${fecha.Fecha}')" title="Editar">
+            <i class="bi bi-pencil-fill"></i>
+          </button>
+          <button class="btn btn-sm btn-link text-danger" onclick="eliminarFecha(${fecha.idFechas})" title="Eliminar">
+            <i class="bi bi-trash-fill"></i>
+          </button>
+        </div>
+        <div>
+          <i class="bi bi-calendar-check me-2 text-primary"></i> 
+          <strong>${formatFecha(fecha.Fecha)}</strong>
+          ${esHoy ? '<span class="badge bg-primary ms-2">Hoy</span>' : ''}
+        </div>
+      </div>`;
+    document.getElementById('fechasList').appendChild(div);
+  }
+
+  window.agregarFecha = async function() {
+    const fechaInput = document.getElementById('fechaInput');
+    const fecha = fechaInput.value;
+    
+    if (!fecha) {
+      showToast('Error', 'Ingrese una fecha válida', true);
+      return;
+    }
+    
+    // Validar que la fecha no sea anterior a hoy
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const fechaSeleccionada = new Date(fecha);
+    
+    if (fechaSeleccionada < hoy) {
+      showToast('Error', 'No se pueden agregar fechas pasadas', true);
+      fechaInput.focus();
+      return;
+    }
+    
+    try {
+      const res = await fetch('/api/fechas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ Fecha: fecha })
+      });
+      
+      const data = await res.json();
+      
+      if (!res.ok) {
+        if (data.duplicado) {
+          showToast('Error', 'Esta fecha ya existe en el sistema', true);
+        } else {
+          throw new Error(data.message || 'Error al agregar fecha');
+        }
+        return;
+      }
+      
+      if (data.success && data.nuevaFecha) {
+        // Agregar la nueva fecha al inicio de la lista
+        const list = document.getElementById('fechasList');
+        if (list.querySelector('.text-muted')) {
+          list.innerHTML = ''; // Eliminar mensaje de "no hay fechas"
+        }
+        addFechaCard(data.nuevaFecha);
+        
+        bootstrap.Modal.getInstance(document.getElementById('addFechaModal')).hide();
+        document.getElementById('addFechaForm').reset();
+        showToast('Éxito', 'Fecha agregada correctamente');
+      }
+    } catch (err) {
+      console.error('Error:', err);
+      showToast('Error', err.message || 'Error al agregar fecha', true);
+    }
+  };
+
+  window.editarFecha = function(id, fecha) {
+    document.getElementById('editFechaId').value = id;
+    document.getElementById('editFechaInput').value = fecha;
+    new bootstrap.Modal(document.getElementById('editFechaModal')).show();
+  };
+
+  window.actualizarFecha = async function() {
+    const id = document.getElementById('editFechaId').value;
+    const fechaInput = document.getElementById('editFechaInput');
+    const nuevaFecha = fechaInput.value;
+    
+    if (!nuevaFecha) {
+      showToast('Error', 'Ingrese una fecha válida', true);
+      return;
+    }
+    
+    // Validar que la fecha no sea anterior a hoy
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const fechaSeleccionada = new Date(nuevaFecha);
+    
+    if (fechaSeleccionada < hoy) {
+      showToast('Error', 'No se pueden agregar fechas pasadas', true);
+      fechaInput.focus();
+      return;
+    }
+    
+    try {
+      const res = await fetch(`/api/fechas/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ Fecha: nuevaFecha })
+      });
+      
+      const data = await res.json();
+      
+      if (!res.ok) {
+        if (data.duplicado) {
+          showToast('Error', 'Esta fecha ya existe en el sistema', true);
+        } else {
+          throw new Error(data.message || 'Error al actualizar fecha');
+        }
+        return;
+      }
+      
+      if (data.success) {
+        // Actualizar la tarjeta de fecha en la interfaz
+        const card = document.getElementById(`card-${id}`);
+        if (card) {
+          card.querySelector('strong').innerText = formatFecha(nuevaFecha);
+          
+          // Actualizar clase para resaltar si es hoy
+          const fechaObj = new Date(nuevaFecha+'T00:00:00');
+          const esHoy = fechaObj.getTime() === hoy.getTime();
+          const fechaCard = card.querySelector('.fecha-card');
+          
+          if (esHoy) {
+            fechaCard.classList.add('fecha-hoy');
+            const hoyBadge = fechaCard.querySelector('.badge') || document.createElement('span');
+            hoyBadge.className = 'badge bg-primary ms-2';
+            hoyBadge.textContent = 'Hoy';
+            if (!fechaCard.querySelector('.badge')) {
+              fechaCard.querySelector('strong').after(hoyBadge);
+            }
+          } else {
+            fechaCard.classList.remove('fecha-hoy');
+            const badge = fechaCard.querySelector('.badge');
+            if (badge) badge.remove();
+          }
+        }
+        
+        bootstrap.Modal.getInstance(document.getElementById('editFechaModal')).hide();
+        showToast('Éxito', 'Fecha actualizada correctamente');
+      }
+    } catch (err) {
+      console.error('Error:', err);
+      showToast('Error', err.message || 'Error al actualizar fecha', true);
+    }
+  };
+
+  window.eliminarFecha = async function(id) {
+    if (!confirm('¿Está seguro que desea eliminar esta fecha? Esta acción no se puede deshacer.')) {
+      return;
+    }
+    
+    try {
+      const res = await fetch(`/api/fechas/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.message || 'Error al eliminar fecha');
+      }
+      
+      if (data.success) {
+        // Animación para eliminar la tarjeta
+        const card = document.getElementById(`card-${id}`);
+        if (card) {
+          card.classList.add('fade-out');
+          setTimeout(() => card.remove(), 300);
+          
+          // Mostrar mensaje si no quedan fechas
+          const list = document.getElementById('fechasList');
+          if (list.children.length === 0) {
+            list.innerHTML = `<div class="col-12 text-center text-muted py-4 fade-in">
+              <i class="bi bi-calendar-x" style="font-size:2rem;"></i>
+              <div>No hay fechas registradas</div>
+            </div>`;
+          }
+        }
+        showToast('Éxito', 'Fecha eliminada correctamente');
+      }
+    } catch (err) {
+      console.error('Error:', err);
+      showToast('Error', err.message || 'Error al eliminar fecha', true);
+    }
+  };
+
+  // Event listeners
+  document.getElementById('saveFechaBtn').addEventListener('click', agregarFecha);
+  document.getElementById('updateFechaBtn').addEventListener('click', actualizarFecha);
+});
+</script>
+{% endblock %}

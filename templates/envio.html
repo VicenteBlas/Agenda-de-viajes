@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Confirmación de Registro</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f4f4f8;
+      padding: 15px;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+    }
+
+    .container {
+      background-color: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      width: 100%;
+      max-width: 100%;
+      overflow: hidden;
+    }
+
+    .profile {
+      background-color: #2c3e50;
+      color: white;
+      padding: 20px 15px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    .profile h1 {
+      font-size: 16px;
+      margin-bottom: 12px;
+    }
+
+    .profile img {
+      width: 100px;
+      height: 100px;
+      object-fit: cover;
+      border-radius: 50%;
+      border: 3px solid white;
+      margin-bottom: 12px;
+    }
+
+    .profile h2 {
+      font-size: 18px;
+      margin-bottom: 12px;
+    }
+
+    .session-info {
+      font-size: 14px;
+    }
+
+    .session-info p {
+      margin: 6px 0;
+    }
+
+    .session-info p strong {
+      font-size: 14px;
+    }
+
+    .confirmation-details {
+      padding: 20px 15px;
+      background-color: #fafafa;
+    }
+
+    .confirmation-details h2 {
+      color: #2c3e50;
+      margin-bottom: 15px;
+      font-size: 18px;
+    }
+
+    .info-row {
+      margin-bottom: 12px;
+      font-size: 14px;
+      color: #333;
+      word-break: break-word;
+    }
+
+    .info-label {
+      font-weight: 700;
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .emoji {
+      margin-left: 5px;
+    }
+
+    a {
+      color: #2980b9;
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    /* Media Queries para tablets */
+    @media (min-width: 480px) {
+      .profile img {
+        width: 120px;
+        height: 120px;
+      }
+      
+      .profile h1 {
+        font-size: 18px;
+      }
+      
+      .profile h2 {
+        font-size: 20px;
+      }
+      
+      .session-info {
+        font-size: 16px;
+      }
+      
+      .confirmation-details h2 {
+        font-size: 20px;
+      }
+      
+      .info-row {
+        font-size: 16px;
+      }
+    }
+
+    /* Media Queries para pantallas grandes */
+    @media (min-width: 768px) {
+      body {
+        padding: 30px;
+      }
+      
+      .container {
+        display: flex;
+        flex-direction: row;
+        max-width: 900px;
+      }
+      
+      .profile {
+        width: 35%;
+        padding: 30px;
+      }
+      
+      .confirmation-details {
+        width: 65%;
+        padding: 30px;
+      }
+      
+      .profile h1 {
+        font-size: 20px;
+      }
+      
+      .profile img {
+        width: 150px;
+        height: 150px;
+      }
+      
+      .profile h2 {
+        font-size: 24px;
+      }
+      
+      .confirmation-details h2 {
+        font-size: 24px;
+      }
+      
+      .info-label {
+        display: inline;
+        margin-right: 5px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="profile">
+      <h1>Travel Agent Info Session</h1>
+      <img src="{{ url_for('static', filename='img/Pudin.png') }}" alt="Vicente Blas Photo">
+      <h2>Vicente Blas</h2>
+
+      <div class="session-info">
+        <p>⏳ <strong>1 hr</strong></p>
+        <p>📅 <strong>{{ fecha }} - {{ hora }}</strong></p>
+        <p>🌎 <strong>Zona horaria local</strong></p>
+      </div>
+    </div>
+
+    <div class="confirmation-details">
+      <h2>¡Gracias por registrarte! <span class="emoji">✅</span></h2>
+      <div class="info-row">
+        <span class="info-label">Nombre completo:</span> {{ nombre }} {{ apellidoP }} {{ apellidoM }}
+      </div>
+      <div class="info-row">
+        <span class="info-label">Teléfono:</span> {{ telefono }}
+      </div>
+      <div class="info-row">
+        <span class="info-label">Correo electrónico:</span> {{ email }}
+      </div>
+      <div class="info-row">
+        <span class="info-label">País:</span> {{ pais }}
+      </div>
+      <div class="info-row">
+        <span class="info-label">Tipo de cliente:</span> {{ tipo }}
+      </div>
+      <div class="info-row" style="margin-top: 20px; font-weight: 700; color: #2c3e50;">
+        <span class="info-label">Tu cita está confirmada para:</span><br />
+        📅 <strong>{{ fecha }}</strong> <br />
+        ⏰ <strong>{{ hora }}</strong> <br />
+        🔗 Enlace Zoom: <a href="{{ enlace_zoom }}" target="_blank" rel="noopener noreferrer">{{ enlace_zoom }}</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
