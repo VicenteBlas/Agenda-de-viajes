@@ -146,8 +146,7 @@ def convert_google_drive_url(url):
     # Si no se puede convertir, devolver el original
     return url
 
-# ✅ FILTRO CORREGIDO - Ahora muestra las imágenes reales
-@app.template_filter('ensure_public_image')
+# ✅ FILTRO CORREGIDO - Ahora muestra las imágenes reales (sin decorador)
 def ensure_public_image_filter(image_path):
     """
     Filtro para asegurar que las imágenes sean accesibles públicamente.
@@ -412,7 +411,7 @@ def clientes_recientes():
         'tipo_prospecto': c.Prospecto.Tipo_Prospecto
     } for c in clientes])
 
-@app.route('/api/clientes', methods=['GET'])
+@app.route('/api/clientes', methods['GET'])
 def listar_clientes():
     clientes = db.session.query(Cliente, Prospecto).join(
         Prospecto, Cliente.Prospecto_idProspecto == Prospecto.idProspecto
@@ -736,7 +735,7 @@ def guardar_cliente():
 Hola {nombre},
 
 Gracias por tu interés en nuestros paquetes de viaje. Te mantendremos informado sobre 
-nuevos paquetes, promociones y ofertas especiales que puedan ser de tu interés.
+nuevos paquetes, promociones and ofertas especiales que puedan ser de tu interés.
 
 Pronto recibirás información sobre nuestros destinos y paquetes disponibles.
 
@@ -1117,6 +1116,9 @@ def uploaded_file(filename):
 # Las funciones de limpieza solo se ejecutarán cuando se acceda a los endpoints específicos
 
 if __name__ == '__main__':
+    # ✅ Registra el filter MANUALMENTE después de crear la app
+    app.jinja_env.filters['ensure_public_image'] = ensure_public_image_filter
+    
     app.secret_key = 'super_secret_key'
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
