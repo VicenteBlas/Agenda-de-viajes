@@ -151,7 +151,7 @@ def convert_google_drive_url(url):
 def ensure_public_image_filter(image_path):
     """
     Filtro para asegurar que las imágenes sean accesibles públicamente.
-    Convierte rutas locales a URLs accesibles.
+    Convierte rutas locales to URLs accesibles.
     """
     if not image_path:
         return "https://via.placeholder.com/300x180"
@@ -932,78 +932,119 @@ def form_paquete():
 @app.route('/paquete/nuevo', methods=['GET', 'POST'])
 def nuevo_paquete():
     if request.method == 'POST':
-        nombre = request.form['nombre']
-        calificacion = request.form['calificacion']
-        promocion = request.form['promocion']
-        destino = request.form['destino']
-        precio_str = request.form['precio']
-        fecha_inicio = request.form['fecha_inicio']
-        fecha_final = request.form['fecha_final']
+        try:
+            nombre = request.form['nombre']
+            calificacion = request.form['calificacion']
+            promocion = request.form['promocion']
+            destino = request.form['destino']
+            precio_str = request.form['precio']
+            fecha_inicio = request.form['fecha_inicio']
+            fecha_final = request.form['fecha_final']
 
-        imagen_url = request.form.get('imagen_url', '').strip()
-        imagen_drive = request.form.get('imagen_drive', '').strip()
-        imagen = ''
+            imagen_url = request.form.get('imagen_url', '').strip()
+            imagen_drive = request.form.get('imagen_drive', '').strip()
+            imagen = ''
 
-        # Prioridad: 1. Google Drive, 2. URL normal
-        if imagen_drive:
-            imagen = convert_google_drive_url(imagen_drive)
-        elif imagen_url:
-            imagen = imagen_url
+            # Prioridad: 1. Google Drive, 2. URL normal
+            if imagen_drive:
+                imagen = convert_google_drive_url(imagen_drive)
+            elif imagen_url:
+                imagen = imagen_url
 
-        precio = float(precio_str.replace(',', ''))
+            # ✅ CONVERSIÓN SEGURA DEL PRECIO
+            try:
+                precio = float(precio_str.replace(',', '').replace('$', '').strip())
+            except ValueError:
+                flash('Formato de precio inválido', 'error')
+                return render_template('form_paquete.html', paquete=None)
 
-        nuevo = Paquete(
-            Nombre=nombre,
-            Calificacion=calificacion,
-            Promocion=promocion,
-            Imagen=imagen,
-            Destino=destino,
-            Precio=precio,
-            Fecha_Inicio=datetime.strptime(fecha_inicio, '%Y-%m-%d'),
-            Fecha_Final=datetime.strptime(fecha_final, '%Y-%m-%d')
-        )
-        db.session.add(nuevo)
-        db.session.commit()
-        flash('Paquete creado correctamente', 'success')
-        return redirect(url_for('pack'))
+            # ✅ CONVERSIÓN SEGURA DE FECHAS
+            try:
+                fecha_inicio_obj = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
+                fecha_final_obj = datetime.strptime(fecha_final, '%Y-%m-%d').date()
+            except ValueError as e:
+                flash(f'Formato de fecha inválido: {str(e)}', 'error')
+                return render_template('form_paquete.html', paquete=None)
 
+            nuevo = Paquete(
+                Nombre=nombre,
+                Calificacion=float(calificacion) if calificacion else 0.0,
+                Promocion=promocion,
+                Imagen=imagen,
+                Destino=destino,
+                Precio=precio,
+                Fecha_Inicio=fecha_inicio_obj,
+                Fecha_Final=fecha_final_obj
+            )
+            
+            db.session.add(nuevo)
+            db.session.commit()
+            flash('Paquete creado correctamente', 'success')
+            return redirect(url_for('pack'))
+            
+        except Exception as e:
+            db.session.rollback()
+            # ✅ MUESTRA EL ERROR REAL PARA DIAGNÓSTICO
+            return f"ERROR EN NUEVO_PAQUETE: {str(e)}<br>TYPE: {type(e).__name__}"
+    
     return render_template('form_paquete.html', paquete=None)
 
 @app.route('/paquete/editar/<int:id>', methods=['GET', 'POST'])
 def editar_paquete(id):
-    paquete = Paquete.query.get_or_404(id)
-
-    if request.method == 'POST':
-        paquete.Nombre = request.form['nombre']
-        paquete.Calificacion = request.form['calificacion']
-        paquete.Promocion = request.form['promocion']
-        paquete.Destino = request.form['destino']
-
-        precio_str = request.form['precio']
-        paquete.Precio = float(precio_str.replace(',', ''))
-
-        paquete.Fecha_Inicio = datetime.strptime(request.form['fecha_inicio'], '%Y-%m-%d')
-        paquete.Fecha_Final = datetime.strptime(request.form['fecha_final'], '%Y-%m-%d')
-
-        imagen_url = request.form.get('imagen_url', '').strip()
-        imagen_drive = request.form.get('imagen_drive', '').strip()
-
-        # Solo actualizar la imagen si se proporciona una nueva
-        nueva_imagen = None
-        
-        if imagen_drive:
-            nueva_imagen = convert_google_drive_url(imagen_drive)
-        elif imagen_url:
-            nueva_imagen = imagen_url
-        
-        # Actualizar la imagen solo si se proporcionó una nueva
-        if nueva_imagen is not None:
-            paquete.Imagen = nueva_imagen
-
-        db.session.commit()
-        flash('Paquete actualizado correctamente', 'success')
+    try:
+        paquete = Paquete.query.get_or_404(id)
+    except Exception as e:
+        flash('Paquete no encontrado', 'error')
         return redirect(url_for('pack'))
 
+    if request.method == 'POST':
+        try:
+            paquete.Nombre = request.form['nombre']
+            
+            # ✅ CONVERSIÓN SEGURA DE CALIFICACIÓN
+            try:
+                paquete.Calificacion = float(request.form['calificacion']) if request.form['calificacion'] else 0.0
+            except ValueError:
+                flash('Formato de calificación inválido', 'error')
+                return render_template('form_paquete.html', paquete=paquete)
+                
+            paquete.Promocion = request.form['promocion']
+            paquete.Destino = request.form['destino']
+
+            # ✅ CONVERSIÓN SEGURA DEL PRECIO
+            precio_str = request.form['precio']
+            try:
+                paquete.Precio = float(precio_str.replace(',', '').replace('$', '').strip())
+            except ValueError:
+                flash('Formato de precio inválido', 'error')
+                return render_template('form_paquete.html', paquete=paquete)
+
+            # ✅ CONVERSIÓN SEGURA DE FECHAS
+            try:
+                paquete.Fecha_Inicio = datetime.strptime(request.form['fecha_inicio'], '%Y-%m-%d').date()
+                paquete.Fecha_Final = datetime.strptime(request.form['fecha_final'], '%Y-%m-%d').date()
+            except ValueError as e:
+                flash(f'Formato de fecha inválido: {str(e)}', 'error')
+                return render_template('form_paquete.html', paquete=paquete)
+
+            imagen_url = request.form.get('imagen_url', '').strip()
+            imagen_drive = request.form.get('imagen_drive', '').strip()
+
+            # Solo actualizar la imagen si se proporciona una nueva
+            if imagen_drive:
+                paquete.Imagen = convert_google_drive_url(imagen_drive)
+            elif imagen_url:
+                paquete.Imagen = imagen_url
+
+            db.session.commit()
+            flash('Paquete actualizado correctamente', 'success')
+            return redirect(url_for('pack'))
+            
+        except Exception as e:
+            db.session.rollback()
+            # ✅ MUESTRA EL ERROR REAL PARA DIAGNÓSTICO
+            return f"ERROR EN EDITAR_PAQUETE: {str(e)}<br>TYPE: {type(e).__name__}"
+    
     return render_template('form_paquete.html', paquete=paquete)
 
 @app.route('/eliminar_paquete/<int:id>', methods=['POST'])
