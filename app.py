@@ -121,6 +121,30 @@ def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
+def convert_google_drive_url(url):
+    """Convierte un enlace de Google Drive a un enlace directo de imagen"""
+    if not url or 'drive.google.com' not in url:
+        return url
+    
+    # Formato 1: https://drive.google.com/uc?id=FILE_ID
+    if 'uc?id=' in url:
+        file_id = url.split('uc?id=')[1].split('&')[0]
+        return f"https://drive.google.com/thumbnail?id={file_id}&sz=w1000"
+    
+    # Formato 2: https://drive.google.com/file/d/FILE_ID/view?usp=sharing
+    if 'file/d/' in url:
+        parts = url.split('/')
+        try:
+            file_id_index = parts.index('d') + 1
+            if file_id_index < len(parts):
+                file_id = parts[file_id_index]
+                return f"https://drive.google.com/thumbnail?id={file_id}&sz=w1000"
+        except (ValueError, IndexError):
+            pass
+    
+    # Si no se puede convertir, devolver el original
+    return url
+
 # Filtro personalizado para asegurar imágenes públicas
 @app.template_filter('ensure_public_image')
 def ensure_public_image_filter(image_path):
@@ -923,28 +947,13 @@ def nuevo_paquete():
         fecha_inicio = request.form['fecha_inicio']
         fecha_final = request.form['fecha_final']
 
-        imagen_url = request.form['imagen_url'].strip()
-        imagen_archivo = request.files['imagen_archivo']
+        imagen_url = request.form.get('imagen_url', '').strip()
+        imagen_drive = request.form.get('imagen_drive', '').strip()
         imagen = ''
 
-        # Manejo mejorado de imágenes
-        if imagen_archivo and imagen_archivo.filename:
-            # Verificar que es una extensión permitida
-            if allowed_file(imagen_archivo.filename):
-                filename = secure_filename(imagen_archivo.filename)
-                # Crear subdirectorio por fecha para mejor organización
-                today = datetime.now().strftime('%Y-%m-%d')
-                upload_dir = os.path.join(app.config['UPLOAD_FOLDER'], today)
-                os.makedirs(upload_dir, exist_ok=True)
-                
-                # Guardar archivo
-                ruta = os.path.join(upload_dir, filename)
-                imagen_archivo.save(ruta)
-                
-                # Guardar ruta relativa para acceso público
-                imagen = f"uploads/{today}/{filename}"
-            else:
-                flash('Tipo de archivo no permitido. Use PNG, JPG, JPEG o GIF.', 'error')
+        # Prioridad: 1. Google Drive, 2. URL normal
+        if imagen_drive:
+            imagen = convert_google_drive_url(imagen_drive)
         elif imagen_url:
             imagen = imagen_url
 
@@ -983,25 +992,20 @@ def editar_paquete(id):
         paquete.Fecha_Inicio = datetime.strptime(request.form['fecha_inicio'], '%Y-%m-%d')
         paquete.Fecha_Final = datetime.strptime(request.form['fecha_final'], '%Y-%m-%d')
 
-        imagen_url = request.form['imagen_url'].strip()
-        imagen_archivo = request.files['imagen_archivo']
+        imagen_url = request.form.get('imagen_url', '').strip()
+        imagen_drive = request.form.get('imagen_drive', '').strip()
 
         # Solo actualizar la imagen si se proporciona una nueva
-        if imagen_archivo and imagen_archivo.filename:
-            if allowed_file(imagen_archivo.filename):
-                filename = secure_filename(imagen_archivo.filename)
-                today = datetime.now().strftime('%Y-%m-%d')
-                upload_dir = os.path.join(app.config['UPLOAD_FOLDER'], today)
-                os.makedirs(upload_dir, exist_ok=True)
-                
-                ruta = os.path.join(upload_dir, filename)
-                imagen_archivo.save(ruta)
-                
-                paquete.Imagen = f"uploads/{today}/{filename}"
-            else:
-                flash('Tipo de archivo no permitido. Use PNG, JPG, JPEG o GIF.', 'error')
+        nueva_imagen = None
+        
+        if imagen_drive:
+            nueva_imagen = convert_google_drive_url(imagen_drive)
         elif imagen_url:
-            paquete.Imagen = imagen_url
+            nueva_imagen = imagen_url
+        
+        # Actualizar la imagen solo si se proporcionó una nueva
+        if nueva_imagen is not None:
+            paquete.Imagen = nueva_imagen
 
         db.session.commit()
         flash('Paquete actualizado correctamente', 'success')
