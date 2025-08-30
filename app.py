@@ -1113,14 +1113,18 @@ def uploaded_file(filename):
         return "Funcionalidad de subida de archivos no disponible en producción", 404
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-# Limpieza automática al iniciar la aplicación
-with app.app_context():
-    try:
-        num = limpiar_fechas_antiguas()
-        logger.info(f"Aplicación iniciada. Se eliminaron {num} fechas antiguas automáticamente")
-    except Exception as e:
-        logger.error(f"Error en limpieza inicial de fechas: {e}")
+# ⚠️ CORRECCIÓN: Eliminado el bloque de limpieza automática durante el inicio
+# Este bloque estaba causando el "TIEMPO DE ESPERA DEL TRABAJADOR" en Railway
 
 if __name__ == '__main__':
+    # Solo ejecutar limpieza si es el proceso principal, no en workers de Gunicorn
+    with app.app_context():
+        try:
+            num = limpiar_fechas_antiguas()
+            logger.info(f"Aplicación iniciada. Se eliminaron {num} fechas antiguas automáticamente")
+        except Exception as e:
+            logger.error(f"Error en limpieza inicial de fechas: {e}")
+    
     app.secret_key = 'super_secret_key'
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
