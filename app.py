@@ -456,7 +456,7 @@ def crear_cliente():
         
         return jsonify({
             'success': True, 
-            'message': 'Cliente creado correctamente',
+            'message': 'Cliente creada correctamente',
             'nuevoCliente': {
                 'idCliente': nuevo_cliente.idCliente,
                 'Nombre': nuevo_cliente.Nombre,
@@ -498,7 +498,7 @@ def actualizar_cliente(id):
         
         return jsonify({
             'success': True, 
-            'message': 'Cliente actualizado correctamente',
+            'message': 'Cliente actualizada correctamente',
             'clienteActualizado': {
                 'idCliente': cliente.idCliente,
                 'Nombre': cliente.Nombre,
@@ -520,7 +520,7 @@ def eliminar_cliente(id):
     try:
         db.session.delete(cliente)
         db.session.commit()
-        return jsonify({'success': True, 'message': 'Cliente eliminado correctamente'})
+        return jsonify({'success': True, 'message': 'Cliente eliminada correctamente'})
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'message': str(e)}), 400
@@ -1113,18 +1113,10 @@ def uploaded_file(filename):
         return "Funcionalidad de subida de archivos no disponible en producción", 404
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-# ⚠️ CORRECCIÓN: Eliminado el bloque de limpieza automática durante el inicio
-# Este bloque estaba causando el "TIEMPO DE ESPERA DEL TRABAJADOR" en Railway
+# ⚠️ CORRECCIÓN COMPLETA: Eliminado TODO el código de limpieza automática durante el inicio
+# Las funciones de limpieza solo se ejecutarán cuando se acceda a los endpoints específicos
 
 if __name__ == '__main__':
-    # Solo ejecutar limpieza si es el proceso principal, no en workers de Gunicorn
-    with app.app_context():
-        try:
-            num = limpiar_fechas_antiguas()
-            logger.info(f"Aplicación iniciada. Se eliminaron {num} fechas antiguas automáticamente")
-        except Exception as e:
-            logger.error(f"Error en limpieza inicial de fechas: {e}")
-    
     app.secret_key = 'super_secret_key'
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
