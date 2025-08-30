@@ -28,12 +28,13 @@ app.config['MAIL_USERNAME'] = 'corporativovbdb2025@gmail.com'
 app.config['MAIL_PASSWORD'] = 'aizr awfd qgug udjb'
 app.config['MAIL_DEFAULT_SENDER'] = 'corporativovbdb2025@gmail.com'
 
-# Configuración para subida de archivos
+# Configuración para subida de archivos (DESHABILITADA para Railway)
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 
-# Crear directorio de uploads si no existe
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+# Crear directorio de uploads si no existe (solo para desarrollo local)
+if os.environ.get('RAILWAY_ENVIRONMENT') is None:
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 db = SQLAlchemy(app)
 mail = Mail(app)
@@ -159,16 +160,8 @@ def ensure_public_image_filter(image_path):
     if image_path.startswith(('http://', 'https://')):
         return image_path
     
-    # Si es una ruta local, convertirla a URL estática
-    if image_path.startswith('/static/uploads/'):
-        return url_for('static', filename=image_path.lstrip('/static/'), _external=True)
-    
-    # Si es una ruta relativa, asumir que está en uploads
-    if not image_path.startswith('/'):
-        return url_for('static', filename='uploads/' + image_path, _external=True)
-    
-    # Para otras rutas, intentar servir desde static
-    return url_for('static', filename=image_path.lstrip('/'), _external=True)
+    # En Railway, las rutas locales no funcionan, así que usamos placeholder
+    return "https://via.placeholder.com/300x180"
 
 # === Endpoints de Fechas ===
 
@@ -1067,9 +1060,12 @@ def enviar_whatsapp():
         flash(f'Error al generar enlaces: {str(e)}', 'error')
         return redirect(url_for('mostrar_paquetes'))
 
-# Ruta para servir archivos subidos
+# Ruta para servir archivos subidos (solo para desarrollo local)
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
+    # En Railway, esta ruta no debería usarse ya que no se suben archivos
+    if os.environ.get('RAILWAY_ENVIRONMENT'):
+        return "Funcionalidad de subida de archivos no disponible en producción", 404
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 # Limpieza automática al iniciar la aplicación
