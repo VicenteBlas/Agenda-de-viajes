@@ -13,7 +13,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-
+app.secret_key = os.environ.get('SECRET_KEY', '7a3e8b1f45c9d2e6a7b4c8f3e1d9a2b5c7e3f8a1d4b9e6c2a5f8e3b1d7c9a4e6')
 # Configuración de la base de datos Railway (nuevas credenciales)
 app.config['SQLALCHEMY_DATABASE_URI'] = (
     'mysql+pymysql://root:VHYZwwkmTYmGQAfwKiQGBwHAlpZcesIQ@gondola.proxy.rlwy.net:24406/railway'
