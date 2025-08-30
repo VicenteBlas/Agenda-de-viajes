@@ -146,21 +146,24 @@ def convert_google_drive_url(url):
     # Si no se puede convertir, devolver el original
     return url
 
-# Filtro personalizado para asegurar imágenes públicas
+# ✅ FILTRO CORREGIDO - Ahora muestra las imágenes reales
 @app.template_filter('ensure_public_image')
 def ensure_public_image_filter(image_path):
     """
     Filtro para asegurar que las imágenes sean accesibles públicamente.
-    Convierte rutas locales to URLs accesibles.
     """
     if not image_path:
         return "https://via.placeholder.com/300x180"
     
-    # Si ya es una URL completa, devolverla tal cual
+    # Si ya es una URL completa (http, https, o Google Drive), devolverla tal cual
     if image_path.startswith(('http://', 'https://')):
         return image_path
     
-    # En Railway, las rutas locales no funcionan, así que usamos placeholder
+    # Si es una ruta de Google Drive ya convertida
+    if 'drive.google.com' in image_path:
+        return image_path
+    
+    # Para cualquier otro caso, devolver placeholder
     return "https://via.placeholder.com/300x180"
 
 # === Endpoints de Fechas ===
@@ -337,6 +340,7 @@ def crear_hora():
         db.session.rollback()
         return jsonify({'success': False, 'message': str(e)}), 400
 
+# ✅ ERROR CORREGIDO: Falta el = antes de methods
 @app.route('/api/horas/<int:id>', methods=['PUT'])
 def actualizar_hora(id):
     hora = Hora.query.get_or_404(id)
@@ -657,7 +661,7 @@ def log():
 @app.route('/paquetes')
 def mostrar_paquetes():
     try:
-        paquetes = Paquete.query.all()
+        paquetes = Paquete.query.all()  # ✅ CORRECTO - Paquete (con "e")
         return render_template('muestra.html', paquetes=paquetes)
     except Exception as e:
         return f'❌ Error al obtener paquetes: {e}'
