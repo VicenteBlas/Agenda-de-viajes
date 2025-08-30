@@ -42,10 +42,22 @@
       box-shadow: 0 12px 24px rgba(0,0,0,0.15);
     }
 
+    .package-img-container {
+      height: 180px;
+      overflow: hidden;
+      position: relative;
+      background-color: #f8f9fa; /* Fondo de respaldo */
+    }
+
     .package-img {
       width: 100%;
-      height: 180px;
+      height: 100%;
       object-fit: cover;
+      transition: transform 0.5s ease;
+    }
+
+    .package-card:hover .package-img {
+      transform: scale(1.05);
     }
 
     .btn-consultar {
@@ -62,9 +74,29 @@
       color: white;
     }
 
-    .rating {
-      font-size: 0.9rem;
+    /* Sistema de estrellas mejorado */
+    .star-rating {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    
+    .stars {
+      display: flex;
+      margin-right: 8px;
+    }
+    
+    .star {
+      color: #FFD700;
+      font-size: 1.1rem;
+      margin-right: 2px;
+    }
+    
+    .rating-value {
+      font-weight: 600;
       color: #444;
+      font-size: 1rem;
+      margin-right: 10px;
     }
 
     .price {
@@ -98,9 +130,6 @@
       color: white;
     }
 
-  
-
-   
     .search-wrapper {
       position: relative;
       max-width: 500px;
@@ -158,6 +187,24 @@
       opacity: 1;
       transform: none;
     }
+    
+    /* Estilo para el descuento con porcentaje */
+    .discount-badge {
+      background: linear-gradient(135deg, #ff6b6b, #c0392b);
+      color: white;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-weight: bold;
+      font-size: 0.85rem;
+      display: inline-block;
+    }
+    
+    .original-price {
+      text-decoration: line-through;
+      color: #888;
+      font-size: 1rem;
+      margin-right: 8px;
+    }
   </style>
 </head>
 <body class="bg-light">
@@ -195,13 +242,69 @@
       {% for paquete in paquetes %}
       <div class="col paquete-card animate">
         <div class="package-card h-100" data-nombre="{{ paquete.Nombre | lower }}" data-destino="{{ paquete.Destino | lower }}">
-          <img src="{{ paquete.Imagen }}" alt="Imagen de {{ paquete.Nombre }}" class="package-img">
+          <div class="package-img-container">
+            <img 
+              src="{{ paquete.Imagen if paquete.Imagen else 'https://via.placeholder.com/300x180' }}" 
+              alt="Imagen de {{ paquete.Nombre }}" 
+              class="package-img"
+              onerror="this.onerror=null; this.src='https://via.placeholder.com/300x180?text=Imagen+no+disponible'"
+              data-enlace-original="{{ paquete.Imagen }}"
+            >
+          </div>
           <div class="p-3">
             <h5 class="fw-bold">{{ paquete.Nombre }}</h5>
             <p class="text-muted mb-1">{{ paquete.Destino }}</p>
-            <p class="rating">⭐ {{ paquete.Calificacion }} &nbsp;&nbsp;|&nbsp;&nbsp; {{ paquete.Promocion }}</p>
-            <p class="price">${{ paquete.Precio }} <small class="text-muted">por noche</small></p>
-            <p class="mb-0"><strong>{{ paquete.Fecha_Inicio.strftime('%d %b') }}</strong> - <strong>{{ paquete.Fecha_Final.strftime('%d %b') }}</strong></p>
+            
+            <!-- Sistema de estrellas mejorado con descuento al lado -->
+            <div class="star-rating">
+              <div class="stars">
+                {% set calificacion_entera = paquete.Calificacion|int %}
+                {% set calificacion_decimal = paquete.Calificacion - calificacion_entera %}
+                
+                {% for i in range(1,6) %}
+                  {% if i <= calificacion_entera %}
+                    <i class="bi bi-star-fill star"></i>
+                  {% elif (i == calificacion_entera + 1) and calificacion_decimal >= 0.5 %}
+                    <i class="bi bi-star-half star"></i>
+                  {% else %}
+                    <i class="bi bi-star star"></i>
+                  {% endif %}
+                {% endfor %}
+              </div>
+              <span class="rating-value">{{ paquete.Calificacion }}</span>
+              
+              <!-- Descuento con porcentaje al lado de la calificación -->
+              {% if paquete.Promocion %}
+                {% set porcentaje_descuento = paquete.Promocion %}
+                <!-- Extraer solo el número con el signo de porcentaje -->
+                {% if '%' in paquete.Promocion %}
+                  {% set partes = paquete.Promocion.split() %}
+                  {% for parte in partes %}
+                    {% if '%' in parte %}
+                      {% set porcentaje_descuento = parte %}
+                    {% endif %}
+                  {% endfor %}
+                {% endif %}
+                <span class="discount-badge">{{ porcentaje_descuento }} OFF</span>
+              {% endif %}
+            </div>
+            
+            <!-- Precio con descuento si aplica -->
+            <div>
+              {% if paquete.Promocion and '%' in paquete.Promocion %}
+                {% set partes = paquete.Promocion.split() %}
+                {% for parte in partes %}
+                  {% if '%' in parte %}
+                    {% set descuento = parte|replace('%','')|float %}
+                    {% set precio_original = paquete.Precio / (1 - descuento/100) %}
+                    <span class="original-price">${{ '{:,.0f}'.format(precio_original) }}</span>
+                  {% endif %}
+                {% endfor %}
+              {% endif %}
+              <span class="price">${{ paquete.Precio }} <small class="text-muted">por noche</small></span>
+            </div>
+            
+            <p class="mb-0 mt-2"><strong>{{ paquete.Fecha_Inicio.strftime('%d %b') }}</strong> - <strong>{{ paquete.Fecha_Final.strftime('%d %b') }}</strong></p>
           </div>
           <div class="card-footer text-center p-3">
             <a href="https://wa.me/18635176243?text=Hola%2C%20quiero%20más%20información%20sobre%20el%20paquete%20{{ paquete.Nombre | urlencode }}" 
@@ -221,6 +324,7 @@
     <br><strong>– Corporativo Vicente Blas</strong>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     const searchInput = document.getElementById('search');
     const paquetes = document.querySelectorAll('.paquete-card');
@@ -239,7 +343,7 @@
         const nombre = inner.getAttribute('data-nombre');
         const destino = inner.getAttribute('data-destino');
         const priceText = inner.querySelector('.price').textContent.replace(/[^\d.]/g, '');
-        const ratingText = inner.querySelector('.rating').textContent.match(/[\d.]+/);
+        const ratingText = inner.querySelector('.rating-value').textContent.match(/[\d.]+/);
 
         const price = parseFloat(priceText);
         const rating = ratingText ? parseFloat(ratingText[0]) : 0;
@@ -269,6 +373,32 @@
     });
 
     document.querySelectorAll('.animate').forEach(el => observer.observe(el));
+
+    // Función para extraer el enlace directo de un enlace de Google Images
+    function extractDirectLink(googleLink) {
+      try {
+        const url = new URL(googleLink);
+        const imgurl = url.searchParams.get('imgurl');
+        return imgurl;
+      } catch (e) {
+        console.error('Error al procesar el enlace de Google:', e);
+        return null;
+      }
+    }
+
+    // Procesar enlaces de Google existentes al cargar la página
+    document.addEventListener('DOMContentLoaded', function() {
+      document.querySelectorAll('.package-img').forEach(img => {
+        const originalSrc = img.getAttribute('data-enlace-original');
+        if (originalSrc && originalSrc.includes('google.com/imgres')) {
+          // Intentar extraer el enlace directo
+          const directLink = extractDirectLink(originalSrc);
+          if (directLink) {
+            img.src = directLink;
+          }
+        }
+      });
+    });
   </script>
 </body>
 </html>

@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
   <title>Detalles de la Sesión</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/css/intlTelInput.css">
   <style>
     * {
       box-sizing: border-box;
@@ -102,6 +103,14 @@
       background-color: #fff;
     }
 
+    .phone-input-container {
+      position: relative;
+    }
+
+    .iti {
+      width: 100%;
+    }
+
     .submit-btn {
       margin-top: 15px;
       padding: 12px;
@@ -112,6 +121,24 @@
       border-radius: 5px;
       cursor: pointer;
       width: 100%;
+      transition: background-color 0.3s;
+    }
+
+    .submit-btn:hover {
+      background-color: #1a252f;
+    }
+
+    .detected-country {
+      margin-top: 8px;
+      padding: 8px;
+      background-color: #e8f4fc;
+      border-radius: 5px;
+      font-size: 14px;
+      display: none;
+    }
+
+    .detected-country.show {
+      display: block;
     }
 
     /* Media Queries para tablets */
@@ -196,7 +223,7 @@
     </div>
 
     <div class="session-details">
-      <form action="{{ url_for('guardar_cliente') }}" method="POST">
+      <form action="{{ url_for('guardar_cliente') }}" method="POST" id="clientForm">
         <div class="form-group">
           <label for="nombre">Nombre</label>
           <input type="text" id="nombre" name="nombre" required>
@@ -212,15 +239,19 @@
           <input type="text" id="apellidoM" name="apellidoM">
         </div>
         
-        <div class="form-group">
-          <label for="telefono">Teléfono (con clave de país)</label>
-          <input type="tel" id="telefono" name="telefono" required>
+        <div class="form-group form-group-full">
+          <label for="telefono">Teléfono</label>
+          <div class="phone-input-container">
+            <input type="tel" id="telefono" name="telefono" required>
+          </div>
+          <div id="detectedCountry" class="detected-country">
+            País detectado: <span id="countryName"></span>
+          </div>
         </div>
         
         <div class="form-group form-group-full">
-          <label for="pais">País</label>
-          <input type="text" id="pais" name="pais" list="lista-paises" required>
-          <datalist id="lista-paises"></datalist>
+          <label for="pais">País (se detecta automáticamente)</label>
+          <input type="text" id="pais" name="pais" readonly>
         </div>
         
         <div class="form-group form-group-full">
@@ -229,11 +260,11 @@
         </div>
         
         <div class="form-group form-group-full">
-          <label for="tipo">¿Qué tipo de cliente eres?</label>
+          <label for="tipo">¿Qué tipo de cliente eres? (El cotizador solo recibira informacion de viajes)</label>
           <select id="tipo" name="tipo" required>
             <option value="">Selecciona una opción</option>
-            <option value="Agente de viajes">Agente de viajes</option>
-            <option value="Cotizador">Cotización</option>
+            <option value="Interesado en crear tu agencia">Interesado en crear tu agencia</option>
+            <option value="Cotizador">Cotizador</option>
           </select>
         </div>
 
@@ -246,15 +277,51 @@
     </div>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/js/intlTelInput.min.js"></script>
   <script>
-    const paises = Intl.supportedValuesOf('region');
-    const nombres = new Intl.DisplayNames(['es'], { type: 'region' });
-    const datalist = document.getElementById('lista-paises');
+    // Inicializar el plugin de entrada de teléfono internacional
+    const phoneInput = document.querySelector("#telefono");
+    const countryInput = document.querySelector("#pais");
+    const detectedCountry = document.querySelector("#detectedCountry");
+    const countryName = document.querySelector("#countryName");
+    
+    const iti = window.intlTelInput(phoneInput, {
+      initialCountry: "mx", // México por defecto
+      separateDialCode: true,
+      utilsScript: "https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/js/utils.js",
+    });
 
-    paises.forEach(codigo => {
-      const option = document.createElement('option');
-      option.value = nombres.of(codigo);
-      datalist.appendChild(option);
+    // Detectar cambios en el número de teléfono
+    phoneInput.addEventListener('input', function() {
+      updateCountryInfo();
+    });
+
+    // Detectar cuando se cambia el país manualmente
+    phoneInput.addEventListener('countrychange', function() {
+      updateCountryInfo();
+    });
+
+    function updateCountryInfo() {
+      const selectedCountryData = iti.getSelectedCountryData();
+      if (selectedCountryData && selectedCountryData.name) {
+        countryInput.value = selectedCountryData.name;
+        countryName.textContent = selectedCountryData.name;
+        detectedCountry.classList.add('show');
+      }
+    }
+
+    // Actualizar el formulario para enviar el número completo con código de país
+    document.getElementById('clientForm').addEventListener('submit', function(e) {
+      // Asegurarse de que el número tenga el código de país
+      if (phoneInput.value.trim()) {
+        const fullNumber = iti.getNumber();
+        phoneInput.value = fullNumber;
+      }
+    });
+
+    // Inicializar la información del país al cargar la página
+    window.addEventListener('load', function() {
+      updateCountryInfo();
     });
   </script>
 </body>

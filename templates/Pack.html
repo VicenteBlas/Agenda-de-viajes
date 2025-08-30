@@ -34,19 +34,98 @@
     {% for paquete in paquetes %}
     <div class="col">
       <div class="package-card">
-        {% if paquete.Imagen %}
-          <img src="{{ paquete.Imagen }}" alt="Imagen de {{ paquete.Nombre }}" class="package-img">
-        {% else %}
-          <img src="https://via.placeholder.com/300x180" alt="Imagen del paquete" class="package-img">
-        {% endif %}
+        <div class="package-image-container">
+          <!-- Imagen con manejo de errores -->
+          <img 
+            src="{{ paquete.Imagen if paquete.Imagen else 'https://via.placeholder.com/300x180' }}" 
+            alt="Imagen de {{ paquete.Nombre }}" 
+            class="package-img"
+            onerror="this.onerror=null; this.src='https://via.placeholder.com/300x180?text=Imagen+no+disponible'"
+            data-enlace-original="{{ paquete.Imagen }}"
+          >
+          
+          <!-- Solo mostrar badge de descuento (rojo) si hay porcentaje -->
+          {% if paquete.Promocion %}
+            {% set porcentaje_descuento = none %}
+            {% set partes = paquete.Promocion.split() %}
+            {% for parte in partes %}
+              {% if '%' in parte %}
+                {% set porcentaje_descuento = parte %}
+              {% endif %}
+            {% endfor %}
+            {% if porcentaje_descuento %}
+              <span class="discount-badge">-{{ porcentaje_descuento }}</span>
+            {% endif %}
+          {% endif %}
+          
+          <!-- Calificación con estrellas y descuento al lado -->
+          <div class="rating-overlay">
+            <div class="star-rating">
+              {% set calificacion_entera = paquete.Calificacion|int %}
+              {% set calificacion_decimal = paquete.Calificacion - calificacion_entera %}
+              
+              {% for i in range(calificacion_entera) %}
+                <i class="bi bi-star-fill"></i>
+              {% endfor %}
+              
+              {% if calificacion_decimal >= 0.5 %}
+                <i class="bi bi-star-half"></i>
+                {% set calificacion_entera = calificacion_entera + 1 %}
+              {% endif %}
+              
+              {% for i in range(5 - calificacion_entera) %}
+                <i class="bi bi-star"></i>
+              {% endfor %}
+              
+              <span class="rating-value">{{ paquete.Calificacion }}</span>
+              
+              <!-- Descuento al lado de la calificación -->
+              {% if paquete.Promocion %}
+                {% set porcentaje_descuento = none %}
+                {% set partes = paquete.Promocion.split() %}
+                {% for parte in partes %}
+                  {% if '%' in parte %}
+                    {% set porcentaje_descuento = parte %}
+                  {% endif %}
+                {% endfor %}
+                {% if porcentaje_descuento %}
+                  <span class="discount-rating"><i class="bi bi-tag-fill"></i> {{ porcentaje_descuento }} OFF</span>
+                {% endif %}
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        
         <div class="package-body">
-          <h5>{{ paquete.Nombre }}</h5>
-          <p class="text-muted mb-1"><strong>Destino:</strong> {{ paquete.Destino }}</p>
-          <p class="rating mb-2"><i class="bi bi-star-fill text-warning"></i> {{ paquete.Calificacion }} | {{ paquete.Promocion }}</p>
-          <p class="price mb-2">${{ '{:,.0f}'.format(paquete.Precio) }} <small class="text-muted">/noche</small></p>
-          <p class="text-muted small mb-3">
-            <i class="bi bi-calendar"></i> {{ paquete.Fecha_Inicio.strftime('%d %b') }} - {{ paquete.Fecha_Final.strftime('%d %b %Y') }}
-          </p>
+          <h5 class="package-title">{{ paquete.Nombre }}</h5>
+          <p class="text-muted mb-2"><i class="bi bi-geo-alt"></i> {{ paquete.Destino }}</p>
+          
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="price-container">
+              {% if paquete.Promocion %}
+                {% set porcentaje_descuento = none %}
+                {% set partes = paquete.Promocion.split() %}
+                {% for parte in partes %}
+                  {% if '%' in parte %}
+                    {% set porcentaje_descuento = parte %}
+                  {% endif %}
+                {% endfor %}
+                {% if porcentaje_descuento %}
+                  {% set descuento = porcentaje_descuento|replace('%','')|float %}
+                  {% set precio_original = paquete.Precio / (1 - descuento/100) %}
+                  <span class="original-price">${{ '{:,.0f}'.format(precio_original) }}</span>
+                {% endif %}
+              {% endif %}
+              <span class="current-price">${{ '{:,.0f}'.format(paquete.Precio) }}</span>
+              <small class="text-muted">/noche</small>
+            </div>
+            
+            <div class="date-info">
+              <small class="text-muted">
+                <i class="bi bi-calendar"></i> {{ paquete.Fecha_Inicio.strftime('%d %b') }} - {{ paquete.Fecha_Final.strftime('%d %b %Y') }}
+              </small>
+            </div>
+          </div>
           
           <div class="acciones">
             <a href="{{ url_for('editar_paquete', id=paquete.idPaquete) }}" class="btn btn-sm btn-warning">
@@ -123,34 +202,159 @@
   </div>
 </div>
 
+<!-- Modal para convertir enlaces de Google -->
+<div class="modal fade" id="googleLinkModal" tabindex="-1" aria-labelledby="googleLinkModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="googleLinkModalLabel">Convertir enlace de Google</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>Pega el enlace de Google Images para convertirlo en un enlace directo a la imagen:</p>
+        <div class="mb-3">
+          <input type="text" class="form-control" id="googleLinkInput" placeholder="Pega el enlace de Google aquí...">
+        </div>
+        <div class="mb-3">
+          <label for="directLinkOutput" class="form-label">Enlace directo:</label>
+          <input type="text" class="form-control" id="directLinkOutput" readonly>
+        </div>
+        <button class="btn btn-primary" onclick="convertGoogleLink()">Convertir</button>
+        <button class="btn btn-success" onclick="copyDirectLink()" id="copyButton" disabled>Copiar enlace</button>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <style>
   .package-container {
     padding: 20px;
   }
 
   .package-card {
-    border: 1px solid #ddd;
+    border: 1px solid #eaeaea;
     border-radius: 12px;
     overflow: hidden;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    transition: transform 0.2s ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    transition: all 0.3s ease;
     background-color: white;
     height: 100%;
+    position: relative;
   }
 
   .package-card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  }
+
+  .package-image-container {
+    position: relative;
+    overflow: hidden;
+    height: 200px;
+    background-color: #f8f9fa;
   }
 
   .package-img {
     width: 100%;
-    height: 180px;
+    height: 100%;
     object-fit: cover;
+    transition: transform 0.5s ease;
+  }
+
+  .package-card:hover .package-img {
+    transform: scale(1.05);
+  }
+
+  .discount-badge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: linear-gradient(135deg, #ff6b6b, #c0392b);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 0.85rem;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    z-index: 2;
+  }
+
+  .rating-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(transparent, rgba(0,0,0,0.7));
+    padding: 10px;
+    color: white;
+    z-index: 2;
+  }
+
+  .star-rating {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .star-rating i {
+    color: #FFD700;
+    font-size: 0.9rem;
+  }
+
+  .rating-value {
+    margin-left: 5px;
+    font-weight: bold;
+    font-size: 0.9rem;
+  }
+
+  .discount-rating {
+    margin-left: 10px;
+    background-color: rgba(76, 175, 80, 0.9);
+    color: white;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
   }
 
   .package-body {
-    padding: 15px;
+    padding: 16px;
+  }
+
+  .package-title {
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #2c3e50;
+    font-size: 1.1rem;
+  }
+
+  .price-container {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  .original-price {
+    text-decoration: line-through;
+    color: #95a5a6;
+    font-size: 0.9rem;
+  }
+
+  .current-price {
+    font-size: 1.3rem;
+    color: #27ae60;
+    font-weight: bold;
+  }
+
+  .date-info {
+    text-align: right;
   }
 
   .btn-consultar {
@@ -168,14 +372,8 @@
     color: white;
   }
 
-  .price {
-    font-size: 1.4rem;
-    color: #2e8b57;
-    font-weight: bold;
-  }
-
   .acciones {
-    margin-top: 10px;
+    margin-top: 15px;
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
@@ -217,7 +415,6 @@
     width: 100%;
   }
 
-  /* Estilos para la barra de búsqueda de destino */
   #buscadorDestino {
     width: 250px;
     transition: width 0.3s ease;
@@ -231,6 +428,18 @@
     border-color: #86b7fe;
     outline: 0;
     box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+  }
+
+  .image-help-text {
+    font-size: 0.85rem;
+    color: #6c757d;
+    margin-top: 5px;
+  }
+
+  .image-help-text a {
+    cursor: pointer;
+    color: #0d6efd;
+    text-decoration: underline;
   }
 </style>
 
@@ -272,20 +481,66 @@
       const packageCards = document.querySelectorAll('.package-card');
       
       packageCards.forEach(card => {
-        // Buscamos el elemento que contiene el texto "Destino:"
-        const destinoElements = Array.from(card.querySelectorAll('p strong')).filter(el => 
-          el.textContent.trim() === 'Destino:'
-        );
-        
-        if (destinoElements.length > 0) {
-          const destinoElement = destinoElements[0];
-          // Obtenemos el nodo de texto siguiente al strong (que contiene el nombre del destino)
-          const destinoText = destinoElement.nextSibling.textContent.toLowerCase().trim();
+        const destinoElement = card.querySelector('.text-muted.mb-2');
+        if (destinoElement) {
+          const destinoText = destinoElement.textContent.toLowerCase();
           card.closest('.col').style.display = destinoText.includes(searchTerm) ? '' : 'none';
         }
       });
     });
+
+    // Procesar enlaces de Google existentes
+    document.querySelectorAll('.package-img').forEach(img => {
+      const originalSrc = img.getAttribute('data-enlace-original');
+      if (originalSrc && originalSrc.includes('google.com/imgres')) {
+        // Intentar extraer el enlace directo
+        const directLink = extractDirectLink(originalSrc);
+        if (directLink) {
+          img.src = directLink;
+        }
+      }
+    });
   });
+
+  // Función para extraer el enlace directo de un enlace de Google Images
+  function extractDirectLink(googleLink) {
+    try {
+      const url = new URL(googleLink);
+      const imgurl = url.searchParams.get('imgurl');
+      return imgurl;
+    } catch (e) {
+      console.error('Error al procesar el enlace de Google:', e);
+      return null;
+    }
+  }
+
+  // Función para convertir enlaces de Google (para el modal)
+  function convertGoogleLink() {
+    const googleLink = document.getElementById('googleLinkInput').value;
+    const directLink = extractDirectLink(googleLink);
+    
+    if (directLink) {
+      document.getElementById('directLinkOutput').value = directLink;
+      document.getElementById('copyButton').disabled = false;
+    } else {
+      document.getElementById('directLinkOutput').value = 'Enlace no válido';
+      document.getElementById('copyButton').disabled = true;
+    }
+  }
+
+  // Función para copiar el enlace directo
+  function copyDirectLink() {
+    const directLinkOutput = document.getElementById('directLinkOutput');
+    directLinkOutput.select();
+    document.execCommand('copy');
+    alert('Enlace copiado al portapapeles');
+  }
+
+  // Función para abrir el modal de conversión
+  function openGoogleLinkConverter() {
+    const modal = new bootstrap.Modal(document.getElementById('googleLinkModal'));
+    modal.show();
+  }
 </script>
 
 {% endblock %}

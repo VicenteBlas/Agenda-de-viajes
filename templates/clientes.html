@@ -16,39 +16,52 @@
   </div>
 </div>
 
-<!-- Barra de búsqueda mejorada -->
+<!-- Barra de búsqueda mejorada con filtro de tipo -->
 <div class="row mb-4">
-  <div class="col-md-8 mx-auto">
+  <div class="col-md-10 mx-auto">
     <div class="card shadow-sm">
       <div class="card-body p-3">
-        <div class="input-group">
-          <span class="input-group-text bg-light border-0">
-            <i class="bi bi-search"></i>
-          </span>
-          <input 
-            type="text" 
-            class="form-control border-0 bg-light" 
-            id="searchClientesInput" 
-            placeholder="Buscar clientes por nombre, apellido o teléfono..."
-            aria-label="Buscar clientes"
-          >
-          <button 
-            class="btn btn-outline-secondary" 
-            type="button" 
-            id="clearSearchBtn"
-            style="display: none;"
-            title="Limpiar búsqueda"
-          >
-            <i class="bi bi-x-lg"></i>
-          </button>
-          <button 
-            class="btn btn-primary" 
-            type="button" 
-            id="searchButton"
-            title="Buscar clientes"
-          >
-            <i class="bi bi-search"></i>
-          </button>
+        <div class="row g-2 align-items-center">
+          <div class="col-md-6">
+            <div class="input-group">
+              <span class="input-group-text bg-light border-0">
+                <i class="bi bi-search"></i>
+              </span>
+              <input 
+                type="text" 
+                class="form-control border-0 bg-light" 
+                id="searchClientesInput" 
+                placeholder="Buscar clientes por nombre, apellido o teléfono..."
+                aria-label="Buscar clientes"
+              >
+              <button 
+                class="btn btn-outline-secondary" 
+                type="button" 
+                id="clearSearchBtn"
+                style="display: none;"
+                title="Limpiar búsqueda"
+              >
+                <i class="bi bi-x-lg"></i>
+              </button>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <select class="form-select" id="tipoClienteFilter">
+              <option value="todos">Todos los tipos</option>
+              <option value="interesado">👤 Interesados</option>
+              <option value="cotizador">✈️ Cotizadores</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <button 
+              class="btn btn-primary w-100" 
+              type="button" 
+              id="searchButton"
+              title="Buscar clientes"
+            >
+              <i class="bi bi-search"></i> Buscar
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -67,53 +80,63 @@
 
 <!-- Sección de Reuniones Agendadas -->
 <div class="mt-5 d-none" id="reunionesSection">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h3>
-      <i class="bi bi-calendar-event text-primary"></i>
-      <span>Reuniones Futuras</span>
-    </h3>
-  </div>
-  
-  <div class="table-responsive">
-    <table class="table table-hover" id="tablaReuniones">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Cliente</th>
-          <th>Fecha</th>
-          <th>Hora</th>
-          <th>Acciones</th>
-        </tr>
-      </thead>
-      <tbody>
-        <!-- Las reuniones futuras se cargarán dinámicamente -->
-      </tbody>
-    </table>
+  <div class="card shadow-sm mb-4">
+    <div class="card-header bg-primary text-white">
+      <h5 class="mb-0">
+        <i class="bi bi-calendar-event me-2"></i>Reuniones Futuras Agendadas
+      </h5>
+    </div>
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-hover" id="tablaReuniones">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Cliente</th>
+              <th>Fecha</th>
+              <th>Hora</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td colspan="5" class="text-center text-muted py-3">
+                Cargando reuniones...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
-  <!-- Sección de Reuniones Pasadas -->
-  <div class="mt-5">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h4>
-        <i class="bi bi-calendar-x text-secondary"></i>
-        <span>Reuniones Pasadas</span>
-      </h4>
+  <div class="card shadow-sm">
+    <div class="card-header bg-secondary text-white">
+      <h5 class="mb-0">
+        <i class="bi bi-clock-history me-2"></i>Reuniones Pasadas
+      </h5>
     </div>
-    <div class="table-responsive">
-      <table class="table table-hover" id="tablaReunionesPasadas">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Cliente</th>
-            <th>Fecha</th>
-            <th>Hora</th>
-            <th>Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          <!-- Las reuniones pasadas se cargarán dinámicamente -->
-        </tbody>
-      </table>
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-hover" id="tablaReunionesPasadas">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Cliente</th>
+              <th>Fecha</th>
+              <th>Hora</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td colspan="5" class="text-center text-muted py-3">
+                Cargando reuniones pasadas...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
@@ -148,9 +171,18 @@
               <input type="text" class="form-control" id="telefonoInput" required>
             </div>
           </div>
-          <div class="mb-3">
-            <label for="emailInput" class="form-label">Email</label>
-            <input type="email" class="form-control" id="emailInput" required>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label for="emailInput" class="form-label">Email</label>
+              <input type="email" class="form-control" id="emailInput" required>
+            </div>
+            <div class="col-md-6 mb-3">
+              <label for="tipoClienteInput" class="form-label">Tipo de Cliente</label>
+              <select class="form-select" id="tipoClienteInput" required>
+                <option value="interesado">👤 Interesado en crear tu propia agencia</option>
+                <option value="cotizador">✈️ Cotizador</option>
+              </select>
+            </div>
           </div>
         </form>
       </div>
@@ -193,9 +225,18 @@
               <input type="text" class="form-control" id="editTelefonoInput" required>
             </div>
           </div>
-          <div class="mb-3">
-            <label for="editEmailInput" class="form-label">Email</label>
-            <input type="email" class="form-control" id="editEmailInput" required>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label for="editEmailInput" class="form-label">Email</label>
+              <input type="email" class="form-control" id="editEmailInput" required>
+            </div>
+            <div class="col-md-6 mb-3">
+              <label for="editTipoClienteInput" class="form-label">Tipo de Cliente</label>
+              <select class="form-select" id="editTipoClienteInput" required>
+                <option value="interesado">👤 Interesado en crear tu propia agencia</option>
+                <option value="cotizador">✈️ Cotizador</option>
+              </select>
+            </div>
           </div>
         </form>
       </div>
@@ -207,66 +248,51 @@
   </div>
 </div>
 
-<!-- Modal de Agendar Reunión Zoom -->
+<!-- Modal Invitación Zoom -->
 <div class="modal fade" id="zoomInviteModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg">
     <div class="modal-content">
-      <div class="modal-header bg-primary text-white">
-        <h5 class="modal-title">Agendar Reunión en Zoom</h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-camera-video text-primary me-2"></i>Agendar Reunión en Zoom
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <div class="row">
-          <div class="col-md-6 mb-3">
-            <label class="form-label">Destinatario:</label>
-            <input type="text" class="form-control" id="zoomInviteEmail" readonly>
-          </div>
-          <div class="col-md-6 mb-3">
-            <label class="form-label">Enlace de Zoom:</label>
-            <input type="text" class="form-control" value="https://us06web.zoom.us/j/81971641072" readonly>
-          </div>
+        <div class="mb-3">
+          <label class="form-label">Cliente</label>
+          <input type="text" class="form-control" id="zoomInviteEmail" readonly>
         </div>
-        
-        <div class="row">
-          <div class="col-md-6 mb-3">
-            <label for="zoomFecha" class="form-label">Fecha:</label>
+        <div class="mb-3">
+          <label for="zoomSubject" class="form-label">Asunto del correo</label>
+          <input type="text" class="form-control" id="zoomSubject" value="Invitación a reunión en Zoom" required>
+        </div>
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <label for="zoomFecha" class="form-label">Fecha</label>
             <select class="form-select" id="zoomFecha" required>
-              <option value="" selected disabled>Selecciona una fecha</option>
+              <option value="" selected disabled>Cargando fechas...</option>
             </select>
           </div>
-          <div class="col-md-6 mb-3">
-            <label for="zoomHora" class="form-label">Hora:</label>
+          <div class="col-md-6">
+            <label for="zoomHora" class="form-label">Hora</label>
             <select class="form-select" id="zoomHora" required>
-              <option value="" selected disabled>Selecciona una hora</option>
+              <option value="" selected disabled>Cargando horas...</option>
             </select>
           </div>
         </div>
-        
         <div class="mb-3">
-          <label for="zoomSubject" class="form-label">Asunto:</label>
-          <input type="text" class="form-control" id="zoomSubject" value="Invitación a reunión Zoom">
-        </div>
-        <div class="mb-3">
-          <label for="zoomMessage" class="form-label">Mensaje:</label>
-          <textarea class="form-control" id="zoomMessage" rows="5">Hola [Nombre],
-
-Te invitamos a una reunión en Zoom con nuestro equipo.
-
-Fecha: [Fecha]
-Hora: [Hora]
-
-Enlace: https://us06web.zoom.us/j/81971641072
-
-Saludos cordiales,
-Equipo Corporativo Vicente Blas SAS DE CV</textarea>
+          <label for="zoomMessage" class="form-label">Mensaje personalizado</label>
+          <textarea class="form-control" id="zoomMessage" rows="6" required></textarea>
+          <div class="form-text">
+            Puedes usar [Nombre], [Fecha] y [Hora] como variables en tu mensaje.
+          </div>
         </div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-          <i class="bi bi-x-circle"></i> Cancelar
-        </button>
-        <button type="button" class="btn btn-primary" id="sendZoomInviteBtn">
-          <i class="bi bi-send"></i> Agendar y Enviar
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-primary" id="sendZoomInviteBtn">
+          <i class="bi bi-send me-1"></i> Enviar Invitación
         </button>
       </div>
     </div>
@@ -309,6 +335,18 @@ Equipo Corporativo Vicente Blas SAS DE CV</textarea>
     border-top: 1px dashed #eee;
     display: flex;
     gap: 0.5rem;
+  }
+  .cliente-badge {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    font-size: 1.2rem;
+  }
+  .badge-interesado {
+    color: #6f42c1;
+  }
+  .badge-cotizador {
+    color: #fd7e14;
   }
   .btn-zoom {
     background-color: #2D8CFF;
@@ -410,6 +448,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // Variables globales
   let todosClientes = [];
   let currentSearchTerm = '';
+  let currentTipoFilter = 'todos';
 
   // Función para mostrar notificaciones
   function showToast(title, message, isError = false, duration = 3000) {
@@ -495,6 +534,12 @@ document.addEventListener('DOMContentLoaded', function() {
       div.className = 'col-12';
       div.id = `card-cliente-${cliente.idCliente}`;
       
+      // Determinar el tipo de cliente y el icono correspondiente
+      const tipoCliente = cliente.Tipo_Prospecto || cliente.tipo || 'interesado'; // Valor por defecto
+      const tipoIcon = tipoCliente.toLowerCase().includes('cotizador') ? '✈️' : '👤';
+      const tipoClass = tipoCliente.toLowerCase().includes('cotizador') ? 'badge-cotizador' : 'badge-interesado';
+      const tipoTexto = tipoCliente.toLowerCase().includes('cotizador') ? 'Cotizador' : 'Interesado';
+      
       // Resaltar coincidencias de búsqueda
       const nombre = highlightMatches(cliente.Nombre, currentSearchTerm);
       const apellidoP = highlightMatches(cliente.Apellido_P, currentSearchTerm);
@@ -503,8 +548,9 @@ document.addEventListener('DOMContentLoaded', function() {
       
       div.innerHTML = `
         <div class="cliente-card">
+          <span class="cliente-badge ${tipoClass}" title="${tipoTexto}">${tipoIcon}</span>
           <div class="cliente-actions">
-            <button class="btn btn-sm btn-link text-primary" onclick="window.editarCliente(${cliente.idCliente},'${escapeHtml(cliente.Nombre)}','${escapeHtml(cliente.Apellido_P)}','${escapeHtml(cliente.Apellido_M||'')}','${escapeHtml(cliente.Telefono)}','${escapeHtml(cliente.Email)}')" title="Editar">
+            <button class="btn btn-sm btn-link text-primary" onclick="window.editarCliente(${cliente.idCliente},'${escapeHtml(cliente.Nombre)}','${escapeHtml(cliente.Apellido_P)}','${escapeHtml(cliente.Apellido_M||'')}','${escapeHtml(cliente.Telefono)}','${escapeHtml(cliente.Email)}','${tipoCliente}')" title="Editar">
               <i class="bi bi-pencil-fill"></i>
             </button>
             <button class="btn btn-sm btn-link text-danger" onclick="window.eliminarCliente(${cliente.idCliente})" title="Eliminar">
@@ -515,6 +561,7 @@ document.addEventListener('DOMContentLoaded', function() {
           <div class="text-muted small mt-1">
             <div><i class="bi bi-telephone"></i> ${telefono}</div>
             <div><i class="bi bi-envelope"></i> ${escapeHtml(cliente.Email)}</div>
+            <div><span class="badge ${tipoClass}">${tipoIcon} ${tipoTexto}</span></div>
           </div>
           <div class="cliente-extra-actions">
             <button class="btn btn-zoom" onclick="window.prepararInvitacionZoom('${escapeHtml(cliente.Nombre)}', '${escapeHtml(cliente.Email)}')">
@@ -558,21 +605,34 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   // Función para buscar clientes
-  function buscarClientes(termino) {
-    currentSearchTerm = termino.toLowerCase().trim();
+  function buscarClientes() {
+    const termino = document.getElementById('searchClientesInput').value.toLowerCase().trim();
+    const tipoFiltro = document.getElementById('tipoClienteFilter').value;
     
-    if (!currentSearchTerm) {
+    currentSearchTerm = termino;
+    currentTipoFilter = tipoFiltro;
+    
+    if (!currentSearchTerm && currentTipoFilter === 'todos') {
       renderClientes(todosClientes);
       return;
     }
     
     const clientesFiltrados = todosClientes.filter(cliente => {
-      return (
+      // Filtrar por término de búsqueda
+      const coincideTexto = !currentSearchTerm || (
         cliente.Nombre.toLowerCase().includes(currentSearchTerm) ||
         cliente.Apellido_P.toLowerCase().includes(currentSearchTerm) ||
         (cliente.Apellido_M && cliente.Apellido_M.toLowerCase().includes(currentSearchTerm)) ||
         cliente.Telefono.includes(currentSearchTerm)
       );
+      
+      // Filtrar por tipo
+      const tipoCliente = cliente.Tipo_Prospecto || cliente.tipo || 'interesado'; // Valor por defecto
+      const coincideTipo = currentTipoFilter === 'todos' || 
+                          (currentTipoFilter === 'interesado' && tipoCliente.toLowerCase().includes('interesado')) ||
+                          (currentTipoFilter === 'cotizador' && tipoCliente.toLowerCase().includes('cotizador'));
+      
+      return coincideTexto && coincideTipo;
     });
     
     renderClientes(clientesFiltrados);
@@ -585,29 +645,20 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if (termino.length > 0) {
       clearBtn.style.display = 'block';
-      if (termino.length >= 2) {
-        buscarClientes(termino);
-      } else if (termino.length === 0) {
-        renderClientes(todosClientes);
-      }
     } else {
       clearBtn.style.display = 'none';
-      currentSearchTerm = '';
-      renderClientes(todosClientes);
     }
   });
 
-  document.getElementById('searchButton').addEventListener('click', function() {
-    const termino = document.getElementById('searchClientesInput').value.trim();
-    buscarClientes(termino);
-  });
+  document.getElementById('searchButton').addEventListener('click', buscarClientes);
 
   document.getElementById('clearSearchBtn').addEventListener('click', function() {
     document.getElementById('searchClientesInput').value = '';
     this.style.display = 'none';
-    currentSearchTerm = '';
-    renderClientes(todosClientes);
+    buscarClientes();
   });
+
+  document.getElementById('tipoClienteFilter').addEventListener('change', buscarClientes);
 
   // Toggle para mostrar/ocultar reuniones
   document.getElementById('toggleReunionesBtn').addEventListener('click', function() {
@@ -905,6 +956,7 @@ Equipo Corporativo Vicente Blas SAS DE CV`;
       Apellido_M: document.getElementById('apellidoMInput').value.trim(),
       Telefono: document.getElementById('telefonoInput').value.trim(),
       Email: document.getElementById('emailInput').value.trim(),
+      tipo: document.getElementById('tipoClienteInput').value,
       Prospecto_idProspecto: 1,
       Pais_idPais: 1
     };
@@ -939,13 +991,14 @@ Equipo Corporativo Vicente Blas SAS DE CV`;
     }
   };
 
-  window.editarCliente = function(id, n, aP, aM, tel, mail) {
+  window.editarCliente = function(id, n, aP, aM, tel, mail, tipo) {
     document.getElementById('editClienteId').value = id; 
     document.getElementById('editNombreInput').value = n; 
     document.getElementById('editApellidoPInput').value = aP;
     document.getElementById('editApellidoMInput').value = aM; 
     document.getElementById('editTelefonoInput').value = tel; 
     document.getElementById('editEmailInput').value = mail;
+    document.getElementById('editTipoClienteInput').value = tipo;
     new bootstrap.Modal(document.getElementById('editClienteModal')).show();
   };
 
@@ -957,6 +1010,7 @@ Equipo Corporativo Vicente Blas SAS DE CV`;
       Apellido_M: document.getElementById('editApellidoMInput').value.trim(),
       Telefono: document.getElementById('editTelefonoInput').value.trim(),
       Email: document.getElementById('editEmailInput').value.trim(),
+      tipo: document.getElementById('editTipoClienteInput').value,
       Prospecto_idProspecto: 1,
       Pais_idPais: 1
     };
@@ -983,15 +1037,7 @@ Equipo Corporativo Vicente Blas SAS DE CV`;
           todosClientes[index] = {...todosClientes[index], ...cliente};
         }
         
-        renderClientes(currentSearchTerm ? 
-          todosClientes.filter(c => 
-            c.Nombre.toLowerCase().includes(currentSearchTerm) ||
-            c.Apellido_P.toLowerCase().includes(currentSearchTerm) ||
-            (c.Apellido_M && c.Apellido_M.toLowerCase().includes(currentSearchTerm)) ||
-            c.Telefono.includes(currentSearchTerm)
-          ) : todosClientes
-        );
-        
+        buscarClientes(); // Volver a aplicar los filtros
         bootstrap.Modal.getInstance(document.getElementById('editClienteModal')).hide();
         showToast('Éxito', 'Cliente actualizado correctamente');
       } else {
@@ -1015,14 +1061,7 @@ Equipo Corporativo Vicente Blas SAS DE CV`;
       
       if (data.success) {
         todosClientes = todosClientes.filter(c => c.idCliente != id);
-        renderClientes(currentSearchTerm ? 
-          todosClientes.filter(c => 
-            c.Nombre.toLowerCase().includes(currentSearchTerm) ||
-            c.Apellido_P.toLowerCase().includes(currentSearchTerm) ||
-            (c.Apellido_M && c.Apellido_M.toLowerCase().includes(currentSearchTerm)) ||
-            c.Telefono.includes(currentSearchTerm)
-          ) : todosClientes
-        );
+        buscarClientes(); // Volver a aplicar los filtros
         showToast('Éxito', 'Cliente eliminado correctamente');
       } else {
         throw new Error(data.message || 'Error al eliminar');

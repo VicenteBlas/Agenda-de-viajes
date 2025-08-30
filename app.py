@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request, redirect, url_for, flash
+from flask import Flask, render_template, jsonify, request, redirect, url_for, flash, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_mail import Mail, Message
 from sqlalchemy import text, desc, and_
@@ -8,7 +8,7 @@ import os
 import urllib.parse
 import logging
 
-# Configuración básica de l
+# Configuración básica de logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -115,6 +115,36 @@ def limpiar_fechas_antiguas():
         db.session.rollback()
         logger.error(f"Error al limpiar fechas antiguas: {e}")
         return 0
+
+def allowed_file(filename):
+    """Verifica si la extensión del archivo está permitida"""
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+
+# Filtro personalizado para asegurar imágenes públicas
+@app.template_filter('ensure_public_image')
+def ensure_public_image_filter(image_path):
+    """
+    Filtro para asegurar que las imágenes sean accesibles públicamente.
+    Convierte rutas locales a URLs accesibles.
+    """
+    if not image_path:
+        return "https://via.placeholder.com/300x180"
+    
+    # Si ya es una URL completa, devolverla tal cual
+    if image_path.startswith(('http://', 'https://')):
+        return image_path
+    
+    # Si es una ruta local, convertirla a URL estática
+    if image_path.startswith('/static/uploads/'):
+        return url_for('static', filename=image_path.lstrip('/static/'), _external=True)
+    
+    # Si es una ruta relativa, asumir que está en uploads
+    if not image_path.startswith('/'):
+        return url_for('static', filename='uploads/' + image_path, _external=True)
+    
+    # Para otras rutas, intentar servir desde static
+    return url_for('static', filename=image_path.lstrip('/'), _external=True)
 
 # === Endpoints de Fechas ===
 
@@ -348,42 +378,61 @@ def contar_clientes():
 
 @app.route('/api/clientes/recientes')
 def clientes_recientes():
-    clientes = Cliente.query.order_by(desc(Cliente.idCliente)).limit(5).all()
+    clientes = db.session.query(Cliente, Prospecto).join(
+        Prospecto, Cliente.Prospecto_idProspecto == Prospecto.idProspecto
+    ).order_by(desc(Cliente.idCliente)).limit(5).all()
+    
     return jsonify([{
-        'id': c.idCliente,
-        'nombre': c.Nombre,
-        'apellido_p': c.Apellido_P,
-        'apellido_m': c.Apellido_M,
-        'email': c.Email
+        'id': c.Cliente.idCliente,
+        'nombre': c.Cliente.Nombre,
+        'apellido_p': c.Cliente.Apellido_P,
+        'apellido_m': c.Cliente.Apellido_M,
+        'email': c.Cliente.Email,
+        'tipo_prospecto': c.Prospecto.Tipo_Prospecto
     } for c in clientes])
 
 @app.route('/api/clientes', methods=['GET'])
 def listar_clientes():
-    clientes = Cliente.query.order_by(Cliente.idCliente).all()
+    clientes = db.session.query(Cliente, Prospecto).join(
+        Prospecto, Cliente.Prospecto_idProspecto == Prospecto.idProspecto
+    ).order_by(Cliente.idCliente).all()
+    
     return jsonify([{
-        'idCliente': c.idCliente,
-        'Nombre': c.Nombre,
-        'Apellido_P': c.Apellido_P,
-        'Apellido_M': c.Apellido_M,
-        'Telefono': c.Telefono,
-        'Email': c.Email
+        'idCliente': c.Cliente.idCliente,
+        'Nombre': c.Cliente.Nombre,
+        'Apellido_P': c.Cliente.Apellido_P,
+        'Apellido_M': c.Cliente.Apellido_M,
+        'Telefono': c.Cliente.Telefono,
+        'Email': c.Cliente.Email,
+        'Tipo_Prospecto': c.Prospecto.Tipo_Prospecto
     } for c in clientes])
 
 @app.route('/api/clientes', methods=['POST'])
 def crear_cliente():
     data = request.get_json()
     try:
+        # Determinar el ID del prospecto según el tipo
+        tipo_cliente = data.get('tipo', 'interesado')
+        if tipo_cliente == 'cotizador':
+            prospecto_id = 2  # ID para cotizadores
+        else:
+            prospecto_id = 1  # ID para interesados (valor por defecto)
+            
         nuevo_cliente = Cliente(
             Nombre=data['Nombre'],
             Apellido_P=data['Apellido_P'],
             Apellido_M=data.get('Apellido_M', ''),
             Telefono=data['Telefono'],
             Email=data['Email'],
-            Prospecto_idProspecto=1,
+            Prospecto_idProspecto=prospecto_id,
             Pais_idPais=1
         )
         db.session.add(nuevo_cliente)
         db.session.commit()
+        
+        # Obtener el tipo de prospecto para la respuesta
+        prospecto = Prospecto.query.get(prospecto_id)
+        
         return jsonify({
             'success': True, 
             'message': 'Cliente creado correctamente',
@@ -393,7 +442,9 @@ def crear_cliente():
                 'Apellido_P': nuevo_cliente.Apellido_P,
                 'Apellido_M': nuevo_cliente.Apellido_M,
                 'Telefono': nuevo_cliente.Telefono,
-                'Email': nuevo_cliente.Email
+                'Email': nuevo_cliente.Email,
+                'tipo': tipo_cliente,
+                'Tipo_Prospecto': prospecto.Tipo_Prospecto if prospecto else tipo_cliente
             }
         })
     except Exception as e:
@@ -405,13 +456,39 @@ def actualizar_cliente(id):
     cliente = Cliente.query.get_or_404(id)
     data = request.get_json()
     try:
+        # Determinar el ID del prospecto según el tipo
+        tipo_cliente = data.get('tipo', 'interesado')
+        if tipo_cliente == 'cotizador':
+            prospecto_id = 2  # ID para cotizadores
+        else:
+            prospecto_id = 1  # ID para interesados (valor por defecto)
+            
         cliente.Nombre = data['Nombre']
         cliente.Apellido_P = data['Apellido_P']
         cliente.Apellido_M = data.get('Apellido_M', '')
         cliente.Telefono = data['Telefono']
         cliente.Email = data['Email']
+        cliente.Prospecto_idProspecto = prospecto_id
+        
         db.session.commit()
-        return jsonify({'success': True, 'message': 'Cliente actualizado correctamente'})
+        
+        # Obtener el tipo de prospecto para la respuesta
+        prospecto = Prospecto.query.get(prospecto_id)
+        
+        return jsonify({
+            'success': True, 
+            'message': 'Cliente actualizado correctamente',
+            'clienteActualizado': {
+                'idCliente': cliente.idCliente,
+                'Nombre': cliente.Nombre,
+                'Apellido_P': cliente.Apellido_P,
+                'Apellido_M': cliente.Apellido_M,
+                'Telefono': cliente.Telefono,
+                'Email': cliente.Email,
+                'tipo': tipo_cliente,
+                'Tipo_Prospecto': prospecto.Tipo_Prospecto if prospecto else tipo_cliente
+            }
+        })
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'message': str(e)}), 400
@@ -632,10 +709,58 @@ def guardar_cliente():
         db.session.add(nuevo_cliente)
         db.session.commit()
 
-        if tipo_cliente.lower() in ["cotización", "cotizador"]:
+        if tipo_cliente.lower() == "cotizador":
+            # ENVIAR CORREOS PARA CLIENTES COTIZADORES
+            cuerpo_mensaje_cliente = f"""
+Hola {nombre},
+
+Gracias por tu interés en nuestros paquetes de viaje. Te mantendremos informado sobre 
+nuevos paquetes, promociones y ofertas especiales que puedan ser de tu interés.
+
+Pronto recibirás información sobre nuestros destinos y paquetes disponibles.
+
+¡Esperamos poder ayudarte a planificar tu próximo viaje!
+
+Equipo Corporativo Vicente Blas SAS DE CV
+            """
+
+            cuerpo_mensaje_admin = f"""
+Nuevo cliente interesado en paquetes registrado en el sistema:
+
+Nombre: {nombre} {apellidoP} {apellidoM}
+📞 Teléfono: {telefono}
+📧 Email: {email}
+🌎 País: {pais_nombre}
+👤 Tipo de prospecto: {tipo_cliente}
+
+Este cliente está interesado en recibir información sobre paquetes de viaje.
+            """
+
+            # Enviar correo al cliente
+            try:
+                msg_cliente = Message(
+                    subject="✅ Registro exitoso - Información de paquetes",
+                    recipients=[email],
+                    body=cuerpo_mensaje_cliente
+                )
+                mail.send(msg_cliente)
+            except Exception as mail_error:
+                print(f"Error al enviar correo al cliente: {mail_error}")
+
+            # Enviar correo al administrador
+            try:
+                msg_admin = Message(
+                    subject=f"📦 Nuevo cliente interesado en paquetes: {nombre} {apellidoP}",
+                    recipients=['corporativovbdb2025@gmail.com'],
+                    body=cuerpo_mensaje_admin
+                )
+                mail.send(msg_admin)
+            except Exception as mail_error:
+                print(f"Error al enviar correo al admin: {mail_error}")
+
             return redirect(url_for('mostrar_paquetes'))
 
-        elif tipo_cliente.lower() == "agente de viajes":
+        elif tipo_cliente.lower() == "interesado en crear tu agencia":
             # Guardar la reunión en la tabla Reuniones
             fecha_obj = datetime.strptime(fecha, '%Y-%m-%d').date()
             
@@ -663,7 +788,7 @@ def guardar_cliente():
             cuerpo_mensaje = f"""
 Hola {nombre},
 
-Gracias por registrarte a nuestra sesión informativa para agentes de viajes con el Señor Vicente Blas Sanchez.
+Gracias por registrarte a nuestra sesión informativa para agentes de viajes con Vicente Blas Benitez.
 El día
 📅 Fecha: {fecha}
 ⏰ Hora: {hora}
@@ -741,10 +866,10 @@ def envio():
         return "Cliente no encontrado", 404
 
     pais_obj = Pais.query.filter_by(idPais=cliente.Pais_idPais).first()
+    prospecto_obj = Prospecto.query.filter_by(idProspecto=cliente.Prospecto_idProspecto).first()
 
     enlace_zoom = "https://us06web.zoom.us/j/81971641072"
-    prospecto = Prospecto.query.filter_by(idProspecto=cliente.Prospecto_idProspecto).first()
-    tipo = prospecto.Tipo_Prospecto if prospecto else ''
+    tipo = prospecto_obj.Tipo_Prospecto if prospecto_obj else ''
 
     return render_template('envio.html',
                            nombre=cliente.Nombre,
@@ -789,8 +914,6 @@ def form_paquete():
 
 @app.route('/paquete/nuevo', methods=['GET', 'POST'])
 def nuevo_paquete():
-    paquetes = Paquete.query.order_by(Paquete.Fecha_Inicio).all()
-    clientes = Cliente.query.order_by(Cliente.Nombre).all()
     if request.method == 'POST':
         nombre = request.form['nombre']
         calificacion = request.form['calificacion']
@@ -804,11 +927,24 @@ def nuevo_paquete():
         imagen_archivo = request.files['imagen_archivo']
         imagen = ''
 
+        # Manejo mejorado de imágenes
         if imagen_archivo and imagen_archivo.filename:
-            filename = secure_filename(imagen_archivo.filename)
-            ruta = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            imagen_archivo.save(ruta)
-            imagen = '/' + ruta
+            # Verificar que es una extensión permitida
+            if allowed_file(imagen_archivo.filename):
+                filename = secure_filename(imagen_archivo.filename)
+                # Crear subdirectorio por fecha para mejor organización
+                today = datetime.now().strftime('%Y-%m-%d')
+                upload_dir = os.path.join(app.config['UPLOAD_FOLDER'], today)
+                os.makedirs(upload_dir, exist_ok=True)
+                
+                # Guardar archivo
+                ruta = os.path.join(upload_dir, filename)
+                imagen_archivo.save(ruta)
+                
+                # Guardar ruta relativa para acceso público
+                imagen = f"uploads/{today}/{filename}"
+            else:
+                flash('Tipo de archivo no permitido. Use PNG, JPG, JPEG o GIF.', 'error')
         elif imagen_url:
             imagen = imagen_url
 
@@ -826,14 +962,13 @@ def nuevo_paquete():
         )
         db.session.add(nuevo)
         db.session.commit()
-        return render_template('Pack.html', paquetes=paquetes, clientes=clientes)
+        flash('Paquete creado correctamente', 'success')
+        return redirect(url_for('pack'))
 
     return render_template('form_paquete.html', paquete=None)
 
 @app.route('/paquete/editar/<int:id>', methods=['GET', 'POST'])
 def editar_paquete(id):
-    paquetes = Paquete.query.order_by(Paquete.Fecha_Inicio).all()
-    clientes = Cliente.query.order_by(Cliente.Nombre).all()
     paquete = Paquete.query.get_or_404(id)
 
     if request.method == 'POST':
@@ -851,16 +986,26 @@ def editar_paquete(id):
         imagen_url = request.form['imagen_url'].strip()
         imagen_archivo = request.files['imagen_archivo']
 
+        # Solo actualizar la imagen si se proporciona una nueva
         if imagen_archivo and imagen_archivo.filename:
-            filename = secure_filename(imagen_archivo.filename)
-            ruta = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            imagen_archivo.save(ruta)
-            paquete.Imagen = '/' + ruta
+            if allowed_file(imagen_archivo.filename):
+                filename = secure_filename(imagen_archivo.filename)
+                today = datetime.now().strftime('%Y-%m-%d')
+                upload_dir = os.path.join(app.config['UPLOAD_FOLDER'], today)
+                os.makedirs(upload_dir, exist_ok=True)
+                
+                ruta = os.path.join(upload_dir, filename)
+                imagen_archivo.save(ruta)
+                
+                paquete.Imagen = f"uploads/{today}/{filename}"
+            else:
+                flash('Tipo de archivo no permitido. Use PNG, JPG, JPEG o GIF.', 'error')
         elif imagen_url:
             paquete.Imagen = imagen_url
 
         db.session.commit()
-        return render_template('Pack.html', paquetes=paquetes, clientes=clientes)
+        flash('Paquete actualizado correctamente', 'success')
+        return redirect(url_for('pack'))
 
     return render_template('form_paquete.html', paquete=paquete)
 
@@ -870,10 +1015,12 @@ def eliminar_paquete(id):
     try:
         db.session.delete(paquete)
         db.session.commit()
+        flash('Paquete eliminado correctamente', 'success')
         return redirect(url_for('pack'))
     except Exception as e:
         db.session.rollback()
-        return f"❌ Error al eliminar paquete: {e}", 400
+        flash(f'Error al eliminar paquete: {e}', 'error')
+        return redirect(url_for('pack'))
 
 @app.route('/enviar_whatsapp', methods=['POST'])
 def enviar_whatsapp():
@@ -915,6 +1062,11 @@ def enviar_whatsapp():
     except Exception as e:
         flash(f'Error al generar enlaces: {str(e)}', 'error')
         return redirect(url_for('mostrar_paquetes'))
+
+# Ruta para servir archivos subidos
+@app.route('/uploads/<path:filename>')
+def uploaded_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 # Limpieza automática al iniciar la aplicación
 with app.app_context():
