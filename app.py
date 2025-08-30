@@ -411,7 +411,7 @@ def clientes_recientes():
         'tipo_prospecto': c.Prospecto.Tipo_Prospecto
     } for c in clientes])
 
-@app.route('/api/clientes', methods['GET'])
+@app.route('/api/clientes', methods=['GET'])
 def listar_clientes():
     clientes = db.session.query(Cliente, Prospecto).join(
         Prospecto, Cliente.Prospecto_idProspecto == Prospecto.idProspecto
