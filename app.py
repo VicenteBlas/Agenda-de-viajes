@@ -146,7 +146,8 @@ def convert_google_drive_url(url):
     # Si no se puede convertir, devolver el original
     return url
 
-# ✅ FILTRO CORREGIDO - Ahora muestra las imágenes reales (sin decorador)
+# ✅ FILTRO CORREGIDO - Ahora muestra las imágenes reales
+@app.template_filter('ensure_public_image')
 def ensure_public_image_filter(image_path):
     """
     Filtro para asegurar que las imágenes sean accesibles públicamente.
@@ -411,6 +412,7 @@ def clientes_recientes():
         'tipo_prospecto': c.Prospecto.Tipo_Prospecto
     } for c in clientes])
 
+# ✅✅✅ CORRECCIÓN: methods=['GET'] en lugar de methods['GET']
 @app.route('/api/clientes', methods=['GET'])
 def listar_clientes():
     clientes = db.session.query(Cliente, Prospecto).join(
@@ -735,7 +737,7 @@ def guardar_cliente():
 Hola {nombre},
 
 Gracias por tu interés en nuestros paquetes de viaje. Te mantendremos informado sobre 
-nuevos paquetes, promociones and ofertas especiales que puedan ser de tu interés.
+nuevos paquetes, promociones y ofertas especiales que puedan ser de tu interés.
 
 Pronto recibirás información sobre nuestros destinos y paquetes disponibles.
 
@@ -944,8 +946,8 @@ def nuevo_paquete():
             fecha_inicio = request.form['fecha_inicio']
             fecha_final = request.form['fecha_final']
 
-            imagen_url = request.form.get('imagen_url', '').strip()
-            imagen_drive = request.form.get('imagen_drive', '').strip()
+            imagen_url = request.form.get('imagen_url', '')
+            imagen_drive = request.form.get('imagen_drive', '')
             imagen = ''
 
             # Prioridad: 1. Google Drive, 2. URL normal
@@ -987,7 +989,6 @@ def nuevo_paquete():
             
         except Exception as e:
             db.session.rollback()
-            # ✅ MUESTRA EL ERROR REAL PARA DIAGNÓSTICO
             return f"ERROR EN NUEVO_PAQUETE: {str(e)}<br>TYPE: {type(e).__name__}"
     
     return render_template('form_paquete.html', paquete=None)
@@ -1024,14 +1025,14 @@ def editar_paquete(id):
 
             # ✅ CONVERSIÓN SEGURA DE FECHAS
             try:
-                paquete.Fecha_Inicio = datetime.strptime(request.form['fecha_inicio'], '%Y-%m-%d').date()
-                paquete.Fecha_Final = datetime.strptime(request.form['fecha_final'], '%Y-%m-%d').date()
+                paquete.Fecha_Inicio = datetime.strptime(request.form['fecha_inicio', '%Y-%m-%d']).date()
+                paquete.Fecha_Final = datetime.strptime(request.form['fecha_final', '%Y-%m-%d']).date()
             except ValueError as e:
                 flash(f'Formato de fecha inválido: {str(e)}', 'error')
                 return render_template('form_paquete.html', paquete=paquete)
 
-            imagen_url = request.form.get('imagen_url', '').strip()
-            imagen_drive = request.form.get('imagen_drive', '').strip()
+            imagen_url = request.form.get('imagen_url', '')
+            imagen_drive = request.form.get('imagen_drive', '')
 
             # Solo actualizar la imagen si se proporciona una nueva
             if imagen_drive:
@@ -1045,7 +1046,6 @@ def editar_paquete(id):
             
         except Exception as e:
             db.session.rollback()
-            # ✅ MUESTRA EL ERROR REAL PARA DIAGNÓSTICO
             return f"ERROR EN EDITAR_PAQUETE: {str(e)}<br>TYPE: {type(e).__name__}"
     
     return render_template('form_paquete.html', paquete=paquete)
@@ -1112,13 +1112,14 @@ def uploaded_file(filename):
         return "Funcionalidad de subida de archivos no disponible en producción", 404
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-# ⚠️ CORRECCIÓN COMPLETA: Eliminado TODO el código de limpieza automática durante el inicio
-# Las funciones de limpieza solo se ejecutarán cuando se acceda a los endpoints específicos
+# Limpieza automática al iniciar la aplicación
+with app.app_context():
+    try:
+        num = limpiar_fechas_antiguas()
+        logger.info(f"Aplicación iniciada. Se eliminaron {num} fechas antiguas automáticamente")
+    except Exception as e:
+        logger.error(f"Error en limpieza inicial de fechas: {e}")
 
 if __name__ == '__main__':
-    # ✅ Registra el filter MANUALMENTE después de crear la app
-    app.jinja_env.filters['ensure_public_image'] = ensure_public_image_filter
-    
     app.secret_key = 'super_secret_key'
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    app.run(debug=True)
