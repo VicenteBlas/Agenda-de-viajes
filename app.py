@@ -7,6 +7,9 @@ from werkzeug.utils import secure_filename
 import os
 import urllib.parse
 import logging
+import pytz
+from apscheduler.schedulers.background import BackgroundScheduler
+import atexit
 
 # Configuración básica de logging
 logging.basicConfig(level=logging.INFO)
@@ -117,6 +120,28 @@ def limpiar_fechas_antiguas():
         logger.error(f"Error al limpiar fechas antiguas: {e}")
         return 0
 
+def limpieza_automatica_mexico():
+    """Ejecuta la limpieza de fechas a las 00:00 hora de México"""
+    try:
+        # Obtener la hora actual en zona horaria de México
+        zona_mexico = pytz.timezone('America/Mexico_City')
+        ahora_mexico = datetime.now(zona_mexico)
+        
+        logger.info(f"⏰ Verificando limpieza programada. Hora en México: {ahora_mexico.strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        # Ejecutar limpieza solo entre 00:00 y 00:05 hora de México
+        if ahora_mexico.hour == 0 and ahora_mexico.minute <= 5:
+            num_eliminadas = limpiar_fechas_antiguas()
+            logger.info(f"✅ Limpieza automática completada. Fechas eliminadas: {num_eliminadas}")
+            return num_eliminadas
+        else:
+            logger.info("🕒 No es hora de limpieza automática")
+            return 0
+            
+    except Exception as e:
+        logger.error(f"❌ Error en limpieza automática: {e}")
+        return 0
+
 def allowed_file(filename):
     """Verifica si la extensión del archivo está permitida"""
     return '.' in filename and \
@@ -166,17 +191,24 @@ def ensure_public_image_filter(image_path):
     # Para cualquier otro caso, devolver placeholder
     return "https://via.placeholder.com/300x180"
 
+# === Configuración del programador de tareas ===
+scheduler = BackgroundScheduler()
+# Programa la limpieza para ejecutarse cada hora y verificar si es medianoche en México
+scheduler.add_job(func=limpieza_automatica_mexico, trigger='cron', hour='*', minute=0)
+scheduler.start()
+
+# Apagar el programador cuando la aplicación se detenga
+atexit.register(lambda: scheduler.shutdown())
+
 # === Endpoints de Fechas ===
 
 @app.route('/api/fechas/count')
 def contar_fechas():
-    limpiar_fechas_antiguas()
     count = db.session.execute(text("SELECT COUNT(*) FROM Fechas")).scalar()
     return jsonify({'count': count})
 
 @app.route('/api/fechas/proximas')
 def fechas_proximas():
-    limpiar_fechas_antiguas()
     hoy = date.today()
     fechas = Fecha.query.filter(Fecha.Fecha >= hoy).order_by(Fecha.Fecha).limit(5).all()
     return jsonify([{
@@ -186,7 +218,6 @@ def fechas_proximas():
 
 @app.route('/api/fechas', methods=['GET'])
 def listar_fechas():
-    limpiar_fechas_antiguas()
     fechas = Fecha.query.order_by(Fecha.Fecha).all()
     return jsonify([{
         'idFechas': f.idFechas,
@@ -1025,8 +1056,8 @@ def editar_paquete(id):
 
             # ✅ CONVERSIÓN SEGURA DE FECHAS
             try:
-                paquete.Fecha_Inicio = datetime.strptime(request.form['fecha_inicio', '%Y-%m-%d']).date()
-                paquete.Fecha_Final = datetime.strptime(request.form['fecha_final', '%Y-%m-%d']).date()
+                paquete.Fecha_Inicio = datetime.strptime(request.form['fecha_inicio'], '%Y-%m-%d').date()
+                paquete.Fecha_Final = datetime.strptime(request.form['fecha_final'], '%Y-%m-%d').date()
             except ValueError as e:
                 flash(f'Formato de fecha inválido: {str(e)}', 'error')
                 return render_template('form_paquete.html', paquete=paquete)
@@ -1112,13 +1143,9 @@ def uploaded_file(filename):
         return "Funcionalidad de subida de archivos no disponible en producción", 404
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-# Limpieza automática al iniciar la aplicación
-with app.app_context():
-    try:
-        num = limpiar_fechas_antiguas()
-        logger.info(f"Aplicación iniciada. Se eliminaron {num} fechas antiguas automáticamente")
-    except Exception as e:
-        logger.error(f"Error en limpieza inicial de fechas: {e}")
+# === Agregar a requirements.txt ===
+# apscheduler==3.10.1
+# pytz==2023.3
 
 if __name__ == '__main__':
     app.secret_key = 'super_secret_key'
