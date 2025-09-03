@@ -13,6 +13,8 @@ import atexit
 from threading import Thread
 import smtplib
 import time as time_module
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 # Configuración básica de logging
 logging.basicConfig(level=logging.INFO)
@@ -27,13 +29,14 @@ app.config['SQLALCHEMY_DATABASE_URI'] = (
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Configuración de correo (con valores por defecto seguros)
-app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
-app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
-app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'True').lower() == 'true'
-app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', '')
-app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '')
-app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', '')
+# Configuración de correo Gmail - CONFIGURACIÓN DIRECTA
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USE_SSL'] = False
+app.config['MAIL_USERNAME'] = 'corporativovbdb2025@gmail.com'
+app.config['MAIL_PASSWORD'] = 'aizr awfd qgug udjb'  # Contraseña de aplicación
+app.config['MAIL_DEFAULT_SENDER'] = 'corporativovbdb2025@gmail.com'
 app.config['MAIL_TIMEOUT'] = 30
 app.config['MAIL_DEBUG'] = False
 
@@ -135,7 +138,7 @@ def limpieza_automatica_mexico():
         
         logger.info(f"⏰ Verificando limpieza programada. Hora en México: {ahora_mexico.strftime('%Y-%m-%d %H:%M:%S')}")
         
-        # Ejecutar limpieza solo entre 00:00 y 00:05 hora de México
+        # Ejecutar limpieza solo entre 00:00 and 00:05 hora de México
         if ahora_mexico.hour == 0 and ahora_mexico.minute <= 5:
             num_eliminadas = limpiar_fechas_antiguas()
             logger.info(f"✅ Limpieza automática completada. Fechas eliminadas: {num_eliminadas}")
@@ -174,29 +177,67 @@ def convert_google_drive_url(url):
     
     return url
 
-def enviar_correo_async(app, msg):
-    """Envía correos en segundo plano con reintentos"""
-    with app.app_context():
-        max_intentos = 3
-        intento = 1
-        
-        while intento <= max_intentos:
+def enviar_correo_gmail(destinatario, asunto, cuerpo):
+    """Función robusta para enviar emails con Gmail en Railway"""
+    max_intentos = 3
+    intento = 1
+    
+    while intento <= max_intentos:
+        try:
+            logger.info(f"📧 Intentando enviar correo a {destinatario} (intento {intento}/{max_intentos})")
+            
+            # Configuración de Gmail
+            gmail_user = 'corporativovbdb2025@gmail.com'
+            gmail_password = 'aizr awfd qgug udjb'
+            
+            # Crear mensaje
+            msg = MIMEMultipart()
+            msg['From'] = gmail_user
+            msg['To'] = destinatario
+            msg['Subject'] = asunto
+            msg.attach(MIMEText(cuerpo, 'plain'))
+            
+            # Intentar puerto 587 con TLS
             try:
-                logger.info(f"📧 Intentando enviar correo (intento {intento}/{max_intentos}) a: {msg.recipients}")
-                
-                mail.send(msg)
-                logger.info("✅ Correo enviado exitosamente")
+                server = smtplib.SMTP('smtp.gmail.com', 587, timeout=15)
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
+                server.login(gmail_user, gmail_password)
+                server.sendmail(gmail_user, destinatario, msg.as_string())
+                server.quit()
+                logger.info("✅ Correo enviado exitosamente via puerto 587")
                 return True
-                
             except Exception as e:
-                logger.error(f"❌ Error en intento {intento}: {e}")
-                if intento == max_intentos:
-                    logger.error("🔥 Todos los intentos fallidos")
-                    # Guardar en log los detalles del correo fallido
-                    logger.info(f"💾 Correo no enviado - Destinatario: {msg.recipients}, Asunto: {msg.subject}")
-                    return False
-                intento += 1
-                time_module.sleep(2)  # Esperar 2 segundos entre intentos
+                logger.warning(f"⚠️ Puerto 587 falló: {e}")
+                
+                # Intentar puerto 465 con SSL
+                try:
+                    server = smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=15)
+                    server.ehlo()
+                    server.login(gmail_user, gmail_password)
+                    server.sendmail(gmail_user, destinatario, msg.as_string())
+                    server.quit()
+                    logger.info("✅ Correo enviado exitosamente via puerto 465")
+                    return True
+                except Exception as e2:
+                    logger.warning(f"⚠️ Puerto 465 también falló: {e2}")
+                    raise Exception(f"Ambos puertos fallaron: 587={e}, 465={e2}")
+                    
+        except Exception as e:
+            logger.error(f"❌ Error en intento {intento}: {e}")
+            if intento == max_intentos:
+                logger.error("🔥 Todos los intentos fallaron")
+                return False
+            intento += 1
+            time_module.sleep(5)  # Esperar 5 segundos entre intentos
+    
+    return False
+
+def enviar_correo_async(app, destinatario, asunto, cuerpo):
+    """Envía correos en segundo plano"""
+    with app.app_context():
+        return enviar_correo_gmail(destinatario, asunto, cuerpo)
 
 # ✅ FILTRO CORREGIDO
 @app.template_filter('ensure_public_image')
@@ -234,36 +275,23 @@ def debug_email():
             'RAILWAY_ENVIRONMENT': os.environ.get('RAILWAY_ENVIRONMENT')
         }
         
-        # Intentar conexión SMTP directa
-        smtp_status = ""
-        try:
-            with smtplib.SMTP(app.config['MAIL_SERVER'], app.config['MAIL_PORT'], timeout=10) as server:
-                server.ehlo()
-                if app.config['MAIL_USE_TLS']:
-                    server.starttls()
-                server.ehlo()
-                server.login(app.config['MAIL_USERNAME'], app.config['MAIL_PASSWORD'])
-            
-            smtp_status = "✅ Conexión SMTP exitosa"
-        except Exception as smtp_error:
-            smtp_status = f"❌ Error SMTP: {smtp_error}"
-        
-        # Intentar enviar correo de prueba
+        # Test de envío de correo de prueba
         email_status = ""
         try:
-            msg = Message(
-                subject="✅ Test Email from Railway",
-                recipients=[app.config['MAIL_USERNAME']],
-                body="This is a test email from your Railway app"
+            resultado = enviar_correo_gmail(
+                'corporativovbdb2025@gmail.com',
+                '✅ Test Email from Railway',
+                'This is a test email from your Railway app'
             )
-            mail.send(msg)
-            email_status = "✅ Email de prueba enviado exitosamente"
+            if resultado:
+                email_status = "✅ Email de prueba enviado exitosamente"
+            else:
+                email_status = "❌ Error enviando email"
         except Exception as email_error:
             email_status = f"❌ Error enviando email: {email_error}"
         
         return jsonify({
             'status': 'diagnostic_complete',
-            'smtp_test': smtp_status,
             'email_test': email_status,
             'config': config
         })
@@ -645,7 +673,7 @@ def listar_reuniones():
             'message': f'Error al obtener reuniones: {str(e)}'
         }), 500
 
-@app.route('/api/reuniones/<int:id>', methods=['DELETE'])
+@app.route('/api/reuniones/<int:id>', methods['DELETE'])
 def eliminar_reunion(id):
     reunion = Reunion.query.get_or_404(id)
     try:
@@ -693,22 +721,14 @@ def enviar_invitacion_zoom():
 
         # Enviar correo al cliente (async)
         try:
-            msg_cliente = Message(
-                subject=data['subject'],
-                recipients=[data['email']],
-                body=data['message']
-            )
-            thread = Thread(target=enviar_correo_async, args=(app, msg_cliente))
+            thread = Thread(target=enviar_correo_async, args=(app, data['email'], data['subject'], data['message']))
             thread.start()
         except Exception as mail_error:
             logger.error(f"Error al programar correo: {mail_error}")
 
         # Enviar copia al administrador (async)
         try:
-            msg_admin = Message(
-                subject=f"Copia: {data['subject']}",
-                recipients=['corporativovbdb2025@gmail.com'],
-                body=f"""Se envió invitación a Zoom a:
+            cuerpo_admin = f"""Se envió invitación a Zoom a:
 
 Nombre: {data['nombre']}
 Email: {data['email']}
@@ -716,8 +736,7 @@ Email: {data['email']}
 Mensaje enviado:
 {data['message']}
 """
-            )
-            thread = Thread(target=enviar_correo_async, args=(app, msg_admin))
+            thread = Thread(target=enviar_correo_async, args=(app, 'corporativovbdb2025@gmail.com', f"Copia: {data['subject']}", cuerpo_admin))
             thread.start()
         except Exception:
             pass
@@ -859,23 +878,13 @@ Este cliente está interesado en recibir información sobre paquetes de viaje.
 
             # Enviar correos en segundo plano
             try:
-                msg_cliente = Message(
-                    subject="✅ Registro exitoso - Información de paquetes",
-                    recipients=[email],
-                    body=cuerpo_mensaje_cliente
-                )
-                thread = Thread(target=enviar_correo_async, args=(app, msg_cliente))
+                thread = Thread(target=enviar_correo_async, args=(app, email, "✅ Registro exitoso - Información de paquetes", cuerpo_mensaje_cliente))
                 thread.start()
             except Exception as mail_error:
                 logger.error(f"Error al programar correo cliente: {mail_error}")
 
             try:
-                msg_admin = Message(
-                    subject=f"📦 Nuevo cliente interesado en paquetes: {nombre} {apellidoP}",
-                    recipients=['corporativovbdb2025@gmail.com'],
-                    body=cuerpo_mensaje_admin
-                )
-                thread = Thread(target=enviar_correo_async, args=(app, msg_admin))
+                thread = Thread(target=enviar_correo_async, args=(app, 'corporativovbdb2025@gmail.com', f"📦 Nuevo cliente interesado en paquetes: {nombre} {apellidoP}", cuerpo_mensaje_admin))
                 thread.start()
             except Exception as mail_error:
                 logger.error(f"Error al programar correo admin: {mail_error}")
@@ -928,21 +937,13 @@ Equipo Corporativo Vicente Blas SAS DE CV
 
             # Enviar correos en segundo plano
             try:
-                mensaje_cliente = Message(
-                    subject="✅ Confirmación de tu sesión informativa",
-                    recipients=[email],
-                    body=cuerpo_mensaje
-                )
-                thread = Thread(target=enviar_correo_async, args=(app, mensaje_cliente))
+                thread = Thread(target=enviar_correo_async, args=(app, email, "✅ Confirmación de tu sesión informativa", cuerpo_mensaje))
                 thread.start()
             except Exception as mail_error:
                 logger.error(f"Error al programar correo confirmación: {mail_error}")
 
             try:
-                mensaje_interno = Message(
-                    subject=f"📩 Nuevo registro de cliente: {nombre} {apellidoP}",
-                    recipients=['corporativovbdb2025@gmail.com'],
-                    body=f"""
+                cuerpo_interno = f"""
 Nuevo cliente registrado en el sistema:
 
 Nombre: {nombre} {apellidoP} {apellidoM}
@@ -952,9 +953,8 @@ Nombre: {nombre} {apellidoP} {apellidoM}
 👤 Tipo de prospecto: {tipo_cliente}
 
 {cuerpo_mensaje}
-                    """
-                )
-                thread = Thread(target=enviar_correo_async, args=(app, mensaje_interno))
+                """
+                thread = Thread(target=enviar_correo_async, args=(app, 'corporativovbdb2025@gmail.com', f"📩 Nuevo registro de cliente: {nombre} {apellidoP}", cuerpo_interno))
                 thread.start()
             except Exception as mail_error:
                 logger.error(f"Error al programar correo interno: {mail_error}")
