@@ -11,6 +11,8 @@ import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
 from threading import Thread
+import smtplib
+import time as time_module
 
 # Configuración básica de logging
 logging.basicConfig(level=logging.INFO)
@@ -32,6 +34,8 @@ app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'True').lower() == '
 app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', '')
 app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '')
 app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', '')
+app.config['MAIL_TIMEOUT'] = 30
+app.config['MAIL_DEBUG'] = False
 
 # Configuración para subida de archivos (DESHABILITADA para Railway)
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
@@ -171,13 +175,28 @@ def convert_google_drive_url(url):
     return url
 
 def enviar_correo_async(app, msg):
-    """Envía correos en segundo plano para evitar timeouts"""
+    """Envía correos en segundo plano con reintentos"""
     with app.app_context():
-        try:
-            mail.send(msg)
-            logger.info("✅ Correo enviado exitosamente")
-        except Exception as e:
-            logger.error(f"❌ Error enviando correo: {e}")
+        max_intentos = 3
+        intento = 1
+        
+        while intento <= max_intentos:
+            try:
+                logger.info(f"📧 Intentando enviar correo (intento {intento}/{max_intentos}) a: {msg.recipients}")
+                
+                mail.send(msg)
+                logger.info("✅ Correo enviado exitosamente")
+                return True
+                
+            except Exception as e:
+                logger.error(f"❌ Error en intento {intento}: {e}")
+                if intento == max_intentos:
+                    logger.error("🔥 Todos los intentos fallidos")
+                    # Guardar en log los detalles del correo fallido
+                    logger.info(f"💾 Correo no enviado - Destinatario: {msg.recipients}, Asunto: {msg.subject}")
+                    return False
+                intento += 1
+                time_module.sleep(2)  # Esperar 2 segundos entre intentos
 
 # ✅ FILTRO CORREGIDO
 @app.template_filter('ensure_public_image')
@@ -198,6 +217,70 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(func=limpieza_automatica_mexico, trigger='cron', hour='*', minute=0)
 scheduler.start()
 atexit.register(lambda: scheduler.shutdown())
+
+# === Endpoint de diagnóstico de email ===
+@app.route('/debug-email')
+def debug_email():
+    """Endpoint completo para debuguear email"""
+    try:
+        # Mostrar configuración actual (ocultando password)
+        config = {
+            'MAIL_SERVER': app.config.get('MAIL_SERVER'),
+            'MAIL_PORT': app.config.get('MAIL_PORT'),
+            'MAIL_USE_TLS': app.config.get('MAIL_USE_TLS'),
+            'MAIL_USERNAME': app.config.get('MAIL_USERNAME'),
+            'MAIL_PASSWORD_SET': bool(app.config.get('MAIL_PASSWORD')),
+            'MAIL_DEFAULT_SENDER': app.config.get('MAIL_DEFAULT_SENDER'),
+            'RAILWAY_ENVIRONMENT': os.environ.get('RAILWAY_ENVIRONMENT')
+        }
+        
+        # Intentar conexión SMTP directa
+        smtp_status = ""
+        try:
+            with smtplib.SMTP(app.config['MAIL_SERVER'], app.config['MAIL_PORT'], timeout=10) as server:
+                server.ehlo()
+                if app.config['MAIL_USE_TLS']:
+                    server.starttls()
+                server.ehlo()
+                server.login(app.config['MAIL_USERNAME'], app.config['MAIL_PASSWORD'])
+            
+            smtp_status = "✅ Conexión SMTP exitosa"
+        except Exception as smtp_error:
+            smtp_status = f"❌ Error SMTP: {smtp_error}"
+        
+        # Intentar enviar correo de prueba
+        email_status = ""
+        try:
+            msg = Message(
+                subject="✅ Test Email from Railway",
+                recipients=[app.config['MAIL_USERNAME']],
+                body="This is a test email from your Railway app"
+            )
+            mail.send(msg)
+            email_status = "✅ Email de prueba enviado exitosamente"
+        except Exception as email_error:
+            email_status = f"❌ Error enviando email: {email_error}"
+        
+        return jsonify({
+            'status': 'diagnostic_complete',
+            'smtp_test': smtp_status,
+            'email_test': email_status,
+            'config': config
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'config': {
+                'MAIL_SERVER': app.config.get('MAIL_SERVER'),
+                'MAIL_PORT': app.config.get('MAIL_PORT'),
+                'MAIL_USE_TLS': app.config.get('MAIL_USE_TLS'),
+                'MAIL_USERNAME': app.config.get('MAIL_USERNAME'),
+                'MAIL_PASSWORD_SET': bool(app.config.get('MAIL_PASSWORD')),
+                'MAIL_DEFAULT_SENDER': app.config.get('MAIL_DEFAULT_SENDER')
+            }
+        }), 500
 
 # === Endpoints de Fechas ===
 
