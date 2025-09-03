@@ -1,0 +1,26 @@
+2025-09-02 16:49:24,945 - __main__ - ERROR - Error al limpiar fechas antiguas: Connection.__init__() got an unexpected keyword argument 'pool_timeout'
+2025-09-02 16:49:24,947 - __main__ - INFO - Aplicación iniciada. Se eliminaron 0 fechas antiguas automáticamente
+2025-09-02 16:49:25,017 - werkzeug - WARNING -  * Debugger is active!
+2025-09-02 16:49:25,024 - werkzeug - INFO -  * Debugger PIN: 120-114-331
+2025-09-02 16:49:42,179 - __main__ - ERROR - Error al limpiar fechas antiguas: Connection.__init__() got an unexpected keyword argument 'pool_timeout'
+2025-09-02 16:49:42,181 - __main__ - INFO - Aplicación iniciada. Se eliminaron 0 fechas antiguas automáticamente
+2025-09-02 16:49:42,281 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5000
+2025-09-02 16:49:42,281 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-09-02 16:49:42,281 - werkzeug - INFO -  * Restarting with stat
+2025-09-02 16:49:45,748 - __main__ - ERROR - Error al limpiar fechas antiguas: Connection.__init__() got an unexpected keyword argument 'pool_timeout'
+2025-09-02 16:49:45,750 - __main__ - INFO - Aplicación iniciada. Se eliminaron 0 fechas antiguas automáticamente
+2025-09-02 16:49:45,796 - werkzeug - WARNING -  * Debugger is active!
+2025-09-02 16:49:45,803 - werkzeug - INFO -  * Debugger PIN: 120-114-331
+2025-09-02 16:50:37,984 - __main__ - ERROR - Error al limpiar fechas antiguas: Connection.__init__() got an unexpected keyword argument 'pool_timeout'
+2025-09-02 16:50:37,984 - __main__ - INFO - Aplicación iniciada. Se eliminaron 0 fechas antiguas automáticamente
+2025-09-02 16:50:38,090 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5000
+2025-09-02 16:50:38,092 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-09-02 16:50:38,096 - werkzeug - INFO -  * Restarting with stat
+2025-09-02 16:50:40,237 - __main__ - ERROR - Error al limpiar fechas antiguas: Connection.__init__() got an unexpected keyword argument 'pool_timeout'
+2025-09-02 16:50:40,237 - __main__ - INFO - Aplicación iniciada. Se eliminaron 0 fechas antiguas automáticamente
+2025-09-02 16:50:40,314 - werkzeug - WARNING -  * Debugger is active!
+2025-09-02 16:50:40,327 - werkzeug - INFO -  * Debugger PIN: 120-114-331
+2025-09-02 16:51:30,242 - __main__ - INFO - Request: GET / - Form: {}
+2025-09-02 16:51:30,246 - werkzeug - INFO - 127.0.0.1 - - [02/Sep/2025 16:51:30] "GET / HTTP/1.1" 200 -
