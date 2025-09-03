@@ -673,7 +673,7 @@ def listar_reuniones():
             'message': f'Error al obtener reuniones: {str(e)}'
         }), 500
 
-@app.route('/api/reuniones/<int:id>', methods['DELETE'])
+@app.route('/api/reuniones/<int:id>', methods=['DELETE'])
 def eliminar_reunion(id):
     reunion = Reunion.query.get_or_404(id)
     try:
