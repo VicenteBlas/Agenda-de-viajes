@@ -35,7 +35,7 @@ app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
 app.config['MAIL_USE_SSL'] = False
 app.config['MAIL_USERNAME'] = 'corporativovbdb2025@gmail.com'
-app.config['MAIL_PASSWORD'] = 'aizr awfd qgug udjb'  # Contraseña de aplicación
+app.config['MAIL_PASSWORD'] = 'dhsx aymo egpz wuea'  # NUEVA CONTRASEÑA DE APLICACIÓN
 app.config['MAIL_DEFAULT_SENDER'] = 'corporativovbdb2025@gmail.com'
 app.config['MAIL_TIMEOUT'] = 30
 app.config['MAIL_DEBUG'] = False
@@ -186,9 +186,9 @@ def enviar_correo_gmail(destinatario, asunto, cuerpo):
         try:
             logger.info(f"📧 Intentando enviar correo a {destinatario} (intento {intento}/{max_intentos})")
             
-            # Configuración de Gmail
+            # Configuración de Gmail - USAR LA NUEVA CONTRASEÑA
             gmail_user = 'corporativovbdb2025@gmail.com'
-            gmail_password = 'aizr awfd qgug udjb'
+            gmail_password = 'dhsx aymo egpz wuea'  # NUEVA CONTRASEÑA
             
             # Crear mensaje
             msg = MIMEMultipart()
@@ -197,32 +197,32 @@ def enviar_correo_gmail(destinatario, asunto, cuerpo):
             msg['Subject'] = asunto
             msg.attach(MIMEText(cuerpo, 'plain'))
             
-            # Intentar puerto 587 con TLS
+            # Intentar puerto 465 con SSL primero (más confiable en entornos cloud)
             try:
-                server = smtplib.SMTP('smtp.gmail.com', 587, timeout=15)
-                server.ehlo()
-                server.starttls()
+                server = smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=15)
                 server.ehlo()
                 server.login(gmail_user, gmail_password)
                 server.sendmail(gmail_user, destinatario, msg.as_string())
                 server.quit()
-                logger.info("✅ Correo enviado exitosamente via puerto 587")
+                logger.info("✅ Correo enviado exitosamente via puerto 465 (SSL)")
                 return True
             except Exception as e:
-                logger.warning(f"⚠️ Puerto 587 falló: {e}")
+                logger.warning(f"⚠️ Puerto 465 falló: {e}")
                 
-                # Intentar puerto 465 con SSL
+                # Intentar puerto 587 con TLS como respaldo
                 try:
-                    server = smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=15)
+                    server = smtplib.SMTP('smtp.gmail.com', 587, timeout=15)
+                    server.ehlo()
+                    server.starttls()
                     server.ehlo()
                     server.login(gmail_user, gmail_password)
                     server.sendmail(gmail_user, destinatario, msg.as_string())
                     server.quit()
-                    logger.info("✅ Correo enviado exitosamente via puerto 465")
+                    logger.info("✅ Correo enviado exitosamente via puerto 587 (TLS)")
                     return True
                 except Exception as e2:
-                    logger.warning(f"⚠️ Puerto 465 también falló: {e2}")
-                    raise Exception(f"Ambos puertos fallaron: 587={e}, 465={e2}")
+                    logger.warning(f"⚠️ Puerto 587 también falló: {e2}")
+                    raise Exception(f"Ambos puertos fallaron: 465={e}, 587={e2}")
                     
         except Exception as e:
             logger.error(f"❌ Error en intento {intento}: {e}")
