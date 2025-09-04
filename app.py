@@ -7,16 +7,6 @@ from werkzeug.utils import secure_filename
 import os
 import urllib.parse
 import logging
-import pytz
-from apscheduler.schedulers.background import BackgroundScheduler
-import atexit
-from threading import Thread
-import smtplib
-import time as time_module
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-import ssl
-import requests
 
 # Configuración básica de logging
 logging.basicConfig(level=logging.INFO)
@@ -24,23 +14,19 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', '7a3e8b1f45c9d2e6a7b4c8f3e1d9a2b5c7e3f8a1d4b9e6c2a5f8e3b1d7c9a4e6')
-
-# Configuración de la base de datos Railway
+# Configuración de la base de datos Railway (nuevas credenciales)
 app.config['SQLALCHEMY_DATABASE_URI'] = (
     'mysql+pymysql://root:VHYZwwkmTYmGQAfwKiQGBwHAlpZcesIQ@gondola.proxy.rlwy.net:24406/railway'
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Configuración de correo Mailgun - USAR VARIABLES DE ENTORNO
-app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.mailgun.org')
-app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
-app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'True').lower() == 'true'
-app.config['MAIL_USE_SSL'] = os.environ.get('MAIL_USE_SSL', 'False').lower() == 'true'
-app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', 'corporativovb@sandboxa92ea0efebee474b934033418f510063.mailgun.org')
-app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '')
-app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', 'corporativovbdb2025@gmail.com')
-app.config['MAIL_TIMEOUT'] = 30
-app.config['MAIL_DEBUG'] = False
+# Configuración de correo
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = 'corporativovbdb2025@gmail.com'
+app.config['MAIL_PASSWORD'] = 'aizr awfd qgug udjb'
+app.config['MAIL_DEFAULT_SENDER'] = 'corporativovbdb2025@gmail.com'
 
 # Configuración para subida de archivos (DESHABILITADA para Railway)
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
@@ -131,28 +117,6 @@ def limpiar_fechas_antiguas():
         logger.error(f"Error al limpiar fechas antiguas: {e}")
         return 0
 
-def limpieza_automatica_mexico():
-    """Ejecuta la limpieza de fechas a las 00:00 hora de México"""
-    try:
-        # Obtener la hora actual en zona horaria de México
-        zona_mexico = pytz.timezone('America/Mexico_City')
-        ahora_mexico = datetime.now(zona_mexico)
-        
-        logger.info(f"⏰ Verificando limpieza programada. Hora en México: {ahora_mexico.strftime('%Y-%m-%d %H:%M:%S')}")
-        
-        # Ejecutar limpieza solo entre 00:00 and 00:05 hora de México
-        if ahora_mexico.hour == 0 and ahora_mexico.minute <= 5:
-            num_eliminadas = limpiar_fechas_antiguas()
-            logger.info(f"✅ Limpieza automática completada. Fechas eliminadas: {num_eliminadas}")
-            return num_eliminadas
-        else:
-            logger.info("🕒 No es hora de limpieza automática")
-            return 0
-            
-    except Exception as e:
-        logger.error(f"❌ Error en limpieza automática: {e}")
-        return 0
-
 def allowed_file(filename):
     """Verifica si la extensión del archivo está permitida"""
     return '.' in filename and \
@@ -163,10 +127,12 @@ def convert_google_drive_url(url):
     if not url or 'drive.google.com' not in url:
         return url
     
+    # Formato 1: https://drive.google.com/uc?id=FILE_ID
     if 'uc?id=' in url:
         file_id = url.split('uc?id=')[1].split('&')[0]
         return f"https://drive.google.com/thumbnail?id={file_id}&sz=w1000"
     
+    # Formato 2: https://drive.google.com/file/d/FILE_ID/view?usp=sharing
     if 'file/d/' in url:
         parts = url.split('/')
         try:
@@ -177,147 +143,40 @@ def convert_google_drive_url(url):
         except (ValueError, IndexError):
             pass
     
+    # Si no se puede convertir, devolver el original
     return url
 
-def enviar_correo(destinatario, asunto, cuerpo):
-    """Función para enviar emails usando Mailgun API (más confiable que SMTP)"""
-    try:
-        # Configuración de Mailgun API
-        mailgun_domain = os.environ.get('MAILGUN_DOMAIN', 'sandboxa92ea0efebee474b934033418f510063.mailgun.org')
-        mailgun_api_key = os.environ.get('MAILGUN_API_KEY', '')
-        
-        if not mailgun_api_key:
-            logger.error("❌ API Key de Mailgun no configurado")
-            # Guardar en log para no perder los emails
-            with open('emails_pendientes.log', 'a') as f:
-                f.write(f"{datetime.now()}|{destinatario}|{asunto}|{cuerpo[:200]}...\n")
-            return False
-        
-        # Preparar la solicitud a la API de Mailgun
-        url = f"https://api.mailgun.net/v3/{mailgun_domain}/messages"
-        auth = ("api", mailgun_api_key)
-        
-        data = {
-            "from": f"Corporativo Vicente Blas <mailgun@{mailgun_domain}>",
-            "to": destinatario,
-            "subject": asunto,
-            "text": cuerpo
-        }
-        
-        # Enviar la solicitud
-        response = requests.post(
-            url, 
-            auth=auth, 
-            data=data,
-            timeout=30
-        )
-        
-        if response.status_code == 200:
-            logger.info("✅ Correo enviado exitosamente via Mailgun API")
-            return True
-        else:
-            logger.error(f"❌ Error Mailgun API: {response.status_code} - {response.text}")
-            # Guardar en log para recuperar después
-            with open('emails_fallidos.log', 'a') as f:
-                f.write(f"{datetime.now()}|{destinatario}|{asunto}|API Error: {response.status_code}\n")
-            return False
-            
-    except Exception as e:
-        logger.error(f"❌ Error enviando correo via API: {str(e)}")
-        # Guardar en log para recuperar después
-        with open('emails_fallidos.log', 'a') as f:
-            f.write(f"{datetime.now()}|{destinatario}|{asunto}|Exception: {str(e)}\n")
-        return False
-
-def enviar_correo_async(app, destinatario, asunto, cuerpo):
-    """Envía correos en segundo plano"""
-    with app.app_context():
-        return enviar_correo(destinatario, asunto, cuerpo)
-
-# ✅ FILTRO CORREGIDO
+# ✅ FILTRO CORREGIDO - Ahora muestra las imágenes reales
 @app.template_filter('ensure_public_image')
 def ensure_public_image_filter(image_path):
+    """
+    Filtro para asegurar que las imágenes sean accesibles públicamente.
+    """
     if not image_path:
         return "https://via.placeholder.com/300x180"
     
+    # Si ya es una URL completa (http, https, o Google Drive), devolverla tal cual
     if image_path.startswith(('http://', 'https://')):
         return image_path
     
+    # Si es una ruta de Google Drive ya convertida
     if 'drive.google.com' in image_path:
         return image_path
     
+    # Para cualquier otro caso, devolver placeholder
     return "https://via.placeholder.com/300x180"
-
-# === Configuración del programador de tareas ===
-scheduler = BackgroundScheduler()
-scheduler.add_job(func=limpieza_automatica_mexico, trigger='cron', hour='*', minute=0)
-scheduler.start()
-atexit.register(lambda: scheduler.shutdown())
-
-# === Endpoint de diagnóstico de email ===
-@app.route('/debug-email')
-def debug_email():
-    """Endpoint completo para debuguear email"""
-    try:
-        # Mostrar configuración actual (ocultando password)
-        config = {
-            'MAIL_SERVER': app.config.get('MAIL_SERVER'),
-            'MAIL_PORT': app.config.get('MAIL_PORT'),
-            'MAIL_USE_TLS': app.config.get('MAIL_USE_TLS'),
-            'MAIL_USERNAME': app.config.get('MAIL_USERNAME'),
-            'MAIL_PASSWORD_SET': bool(app.config.get('MAIL_PASSWORD')),
-            'MAIL_DEFAULT_SENDER': app.config.get('MAIL_DEFAULT_SENDER'),
-            'RAILWAY_ENVIRONMENT': os.environ.get('RAILWAY_ENVIRONMENT'),
-            'MAILGUN_API_KEY_SET': bool(os.environ.get('MAILGUN_API_KEY')),
-            'MAILGUN_DOMAIN': os.environ.get('MAILGUN_DOMAIN')
-        }
-        
-        # Test de envío de correo de prueba
-        email_status = ""
-        try:
-            resultado = enviar_correo(
-                'corporativovbdb2025@gmail.com',
-                '✅ Test Email from Railway',
-                'This is a test email from your Railway app using Mailgun API'
-            )
-            if resultado:
-                email_status = "✅ Email de prueba enviado exitosamente"
-            else:
-                email_status = "❌ Error enviando email"
-        except Exception as email_error:
-            email_status = f"❌ Error enviando email: {email_error}"
-        
-        return jsonify({
-            'status': 'diagnostic_complete',
-            'email_test': email_status,
-            'config': config
-        })
-        
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': str(e),
-            'config': {
-                'MAIL_SERVER': app.config.get('MAIL_SERVER'),
-                'MAIL_PORT': app.config.get('MAIL_PORT'),
-                'MAIL_USE_TLS': app.config.get('MAIL_USE_TLS'),
-                'MAIL_USERNAME': app.config.get('MAIL_USERNAME'),
-                'MAIL_PASSWORD_SET': bool(app.config.get('MAIL_PASSWORD')),
-                'MAIL_DEFAULT_SENDER': app.config.get('MAIL_DEFAULT_SENDER'),
-                'MAILGUN_API_KEY_SET': bool(os.environ.get('MAILGUN_API_KEY')),
-                'MAILGUN_DOMAIN': os.environ.get('MAILGUN_DOMAIN')
-            }
-        }), 500
 
 # === Endpoints de Fechas ===
 
 @app.route('/api/fechas/count')
 def contar_fechas():
+    limpiar_fechas_antiguas()
     count = db.session.execute(text("SELECT COUNT(*) FROM Fechas")).scalar()
     return jsonify({'count': count})
 
 @app.route('/api/fechas/proximas')
 def fechas_proximas():
+    limpiar_fechas_antiguas()
     hoy = date.today()
     fechas = Fecha.query.filter(Fecha.Fecha >= hoy).order_by(Fecha.Fecha).limit(5).all()
     return jsonify([{
@@ -327,6 +186,7 @@ def fechas_proximas():
 
 @app.route('/api/fechas', methods=['GET'])
 def listar_fechas():
+    limpiar_fechas_antiguas()
     fechas = Fecha.query.order_by(Fecha.Fecha).all()
     return jsonify([{
         'idFechas': f.idFechas,
@@ -339,6 +199,7 @@ def crear_fecha():
     try:
         fecha_input = datetime.strptime(data['Fecha'], '%Y-%m-%d').date()
         
+        # Verificar si la fecha ya existe
         fecha_existente = Fecha.query.filter_by(Fecha=fecha_input).first()
         if fecha_existente:
             return jsonify({
@@ -369,6 +230,7 @@ def actualizar_fecha(id):
     try:
         nueva_fecha_input = datetime.strptime(data['Fecha'], '%Y-%m-%d').date()
         
+        # Verificar si la nueva fecha ya existe (excluyendo la fecha actual)
         fecha_existente = Fecha.query.filter(
             and_(
                 Fecha.Fecha == nueva_fecha_input,
@@ -453,6 +315,7 @@ def crear_hora():
         hora_str = data['Hora']
         hora_obj = datetime.strptime(hora_str, '%H:%M').time()
         
+        # Verificar si la hora ya existe
         hora_existente = Hora.query.filter_by(Hora=hora_obj).first()
         if hora_existente:
             return jsonify({
@@ -477,6 +340,7 @@ def crear_hora():
         db.session.rollback()
         return jsonify({'success': False, 'message': str(e)}), 400
 
+# ✅ ERROR CORREGIDO: Falta el = antes de methods
 @app.route('/api/horas/<int:id>', methods=['PUT'])
 def actualizar_hora(id):
     hora = Hora.query.get_or_404(id)
@@ -485,6 +349,7 @@ def actualizar_hora(id):
         nueva_hora_str = data['Hora']
         nueva_hora_obj = datetime.strptime(nueva_hora_str, '%H:%M').time()
         
+        # Verificar si la nueva hora ya existe (excluyendo la hora actual)
         hora_existente = Hora.query.filter(
             and_(
                 Hora.Hora == nueva_hora_obj,
@@ -547,6 +412,7 @@ def clientes_recientes():
         'tipo_prospecto': c.Prospecto.Tipo_Prospecto
     } for c in clientes])
 
+# ✅✅✅ CORRECCIÓN: methods=['GET'] en lugar de methods['GET']
 @app.route('/api/clientes', methods=['GET'])
 def listar_clientes():
     clientes = db.session.query(Cliente, Prospecto).join(
@@ -567,8 +433,12 @@ def listar_clientes():
 def crear_cliente():
     data = request.get_json()
     try:
+        # Determinar el ID del prospecto según el tipo
         tipo_cliente = data.get('tipo', 'interesado')
-        prospecto_id = 2 if tipo_cliente == 'cotizador' else 1
+        if tipo_cliente == 'cotizador':
+            prospecto_id = 2  # ID para cotizadores
+        else:
+            prospecto_id = 1  # ID para interesados (valor por defecto)
             
         nuevo_cliente = Cliente(
             Nombre=data['Nombre'],
@@ -582,6 +452,7 @@ def crear_cliente():
         db.session.add(nuevo_cliente)
         db.session.commit()
         
+        # Obtener el tipo de prospecto para la respuesta
         prospecto = Prospecto.query.get(prospecto_id)
         
         return jsonify({
@@ -607,8 +478,12 @@ def actualizar_cliente(id):
     cliente = Cliente.query.get_or_404(id)
     data = request.get_json()
     try:
+        # Determinar el ID del prospecto según el tipo
         tipo_cliente = data.get('tipo', 'interesado')
-        prospecto_id = 2 if tipo_cliente == 'cotizador' else 1
+        if tipo_cliente == 'cotizador':
+            prospecto_id = 2  # ID para cotizadores
+        else:
+            prospecto_id = 1  # ID para interesados (valor por defecto)
             
         cliente.Nombre = data['Nombre']
         cliente.Apellido_P = data['Apellido_P']
@@ -619,6 +494,7 @@ def actualizar_cliente(id):
         
         db.session.commit()
         
+        # Obtener el tipo de prospecto para la respuesta
         prospecto = Prospecto.query.get(prospecto_id)
         
         return jsonify({
@@ -690,6 +566,7 @@ def enviar_invitacion_zoom():
     try:
         data = request.json
         
+        # Validar datos requeridos
         required_fields = ['email', 'nombre', 'subject', 'message', 'fecha', 'hora']
         for field in required_fields:
             if field not in data or not data[field]:
@@ -698,6 +575,7 @@ def enviar_invitacion_zoom():
                     'message': f'El campo {field} es requerido'
                 }), 400
 
+        # Convertir fechas
         try:
             fecha_obj = datetime.strptime(data['fecha'], '%Y-%m-%d').date()
             hora_obj = datetime.strptime(data['hora'], '%H:%M').time()
@@ -707,6 +585,7 @@ def enviar_invitacion_zoom():
                 'message': f'Formato de fecha/hora inválido: {str(e)}'
             }), 400
 
+        # Guardar la reunión en la base de datos
         nueva_reunion = Reunion(
             cliente=data['nombre'],
             email=data['email'],
@@ -718,16 +597,27 @@ def enviar_invitacion_zoom():
         db.session.add(nueva_reunion)
         db.session.commit()
 
-        # Enviar correo al cliente (async)
+        # Enviar correo al cliente
         try:
-            thread = Thread(target=enviar_correo_async, args=(app, data['email'], data['subject'], data['message']))
-            thread.start()
+            msg_cliente = Message(
+                subject=data['subject'],
+                recipients=[data['email']],
+                body=data['message']
+            )
+            mail.send(msg_cliente)
         except Exception as mail_error:
-            logger.error(f"Error al programar correo: {mail_error}")
+            db.session.rollback()
+            return jsonify({
+                'success': False,
+                'message': f'Error al enviar correo: {str(mail_error)}'
+            }), 500
 
-        # Enviar copia al administrador (async)
+        # Enviar copia al administrador
         try:
-            cuerpo_admin = f"""Se envió invitación a Zoom a:
+            msg_admin = Message(
+                subject=f"Copia: {data['subject']}",
+                recipients=['corporativovbdb2025@gmail.com'],
+                body=f"""Se envió invitación a Zoom a:
 
 Nombre: {data['nombre']}
 Email: {data['email']}
@@ -735,10 +625,10 @@ Email: {data['email']}
 Mensaje enviado:
 {data['message']}
 """
-            thread = Thread(target=enviar_correo_async, args=(app, 'corporativovbdb2025@gmail.com', f"Copia: {data['subject']}", cuerpo_admin))
-            thread.start()
+            )
+            mail.send(msg_admin)
         except Exception:
-            pass
+            pass  # No hacemos rollback si falla solo el correo al admin
 
         return jsonify({
             'success': True,
@@ -772,7 +662,7 @@ def log():
 @app.route('/paquetes')
 def mostrar_paquetes():
     try:
-        paquetes = Paquete.query.all()
+        paquetes = Paquete.query.all()  # ✅ CORRECTO - Paquete (con "e")
         return render_template('muestra.html', paquetes=paquetes)
     except Exception as e:
         return f'❌ Error al obtener paquetes: {e}'
@@ -803,9 +693,6 @@ def get_horas(id_fecha):
 
 @app.route('/guardar_cliente', methods=['POST'])
 def guardar_cliente():
-    logger.info("🔵🔵🔵 INICIANDO guardar_cliente 🔵🔵🔵")
-    logger.info(f"Form data: {dict(request.form)}")
-    
     try:
         nombre = request.form['nombre']
         apellidoP = request.form['apellidoP']
@@ -818,11 +705,8 @@ def guardar_cliente():
         fecha = request.form.get('fecha')
         hora = request.form.get('hora')
 
-        logger.info(f"📋 Datos recibidos: {nombre} {apellidoP}, tipo: {tipo_cliente}, fecha: {fecha}, hora: {hora}")
-
         prospecto = Prospecto.query.filter_by(Tipo_Prospecto=tipo_cliente).first()
         if not prospecto:
-            logger.error(f"❌ Tipo de prospecto '{tipo_cliente}' no encontrado.")
             return f"❌ Tipo de prospecto '{tipo_cliente}' no encontrado."
 
         pais_existente = Pais.query.filter_by(pais=pais_nombre).first()
@@ -847,9 +731,8 @@ def guardar_cliente():
         db.session.add(nuevo_cliente)
         db.session.commit()
 
-        logger.info(f"✅ Cliente guardado exitosamente: ID {nuevo_cliente.idCliente}")
-
         if tipo_cliente.lower() == "cotizador":
+            # ENVIAR CORREOS PARA CLIENTES COTIZADORES
             cuerpo_mensaje_cliente = f"""
 Hola {nombre},
 
@@ -875,40 +758,44 @@ Nombre: {nombre} {apellidoP} {apellidoM}
 Este cliente está interesado en recibir información sobre paquetes de viaje.
             """
 
-            # Enviar correos en segundo plano
+            # Enviar correo al cliente
             try:
-                thread = Thread(target=enviar_correo_async, args=(app, email, "✅ Registro exitoso - Información de paquetes", cuerpo_mensaje_cliente))
-                thread.start()
+                msg_cliente = Message(
+                    subject="✅ Registro exitoso - Información de paquetes",
+                    recipients=[email],
+                    body=cuerpo_mensaje_cliente
+                )
+                mail.send(msg_cliente)
             except Exception as mail_error:
-                logger.error(f"Error al programar correo cliente: {mail_error}")
+                print(f"Error al enviar correo al cliente: {mail_error}")
 
+            # Enviar correo al administrador
             try:
-                thread = Thread(target=enviar_correo_async, args=(app, 'corporativovbdb2025@gmail.com', f"📦 Nuevo cliente interesado en paquetes: {nombre} {apellidoP}", cuerpo_mensaje_admin))
-                thread.start()
+                msg_admin = Message(
+                    subject=f"📦 Nuevo cliente interesado en paquetes: {nombre} {apellidoP}",
+                    recipients=['corporativovbdb2025@gmail.com'],
+                    body=cuerpo_mensaje_admin
+                )
+                mail.send(msg_admin)
             except Exception as mail_error:
-                logger.error(f"Error al programar correo admin: {mail_error}")
+                print(f"Error al enviar correo al admin: {mail_error}")
 
             return redirect(url_for('mostrar_paquetes'))
 
         elif tipo_cliente.lower() == "interesado en crear tu agencia":
-            if not fecha or not hora:
-                logger.error("❌ Fecha y hora requeridas para reuniones")
-                return "❌ Fecha y hora son requeridas para agendar reunión", 400
-
-            try:
-                fecha_obj = datetime.strptime(fecha, '%Y-%m-%d').date()
-            except ValueError as e:
-                logger.error(f"❌ Formato de fecha inválido: {fecha}. Error: {str(e)}")
-                return f"❌ Formato de fecha inválido: {fecha}", 400
+            # Guardar la reunión en la tabla Reuniones
+            fecha_obj = datetime.strptime(fecha, '%Y-%m-%d').date()
             
+            # Manejo robusto de la conversión de hora
             try:
+                # Primero intentamos con formato HH:MM
                 hora_obj = datetime.strptime(hora, '%H:%M').time()
             except ValueError:
                 try:
+                    # Si falla, intentamos con formato HH:MM:SS
                     hora_obj = datetime.strptime(hora, '%H:%M:%S').time()
                 except ValueError as e:
-                    logger.error(f"❌ Formato de hora no válido: {hora}. Error: {str(e)}")
-                    return f"❌ Formato de hora no válido: {hora}", 400
+                    return f"❌ Formato de hora no válido: {hora}. Error: {str(e)}"
             
             nueva_reunion = Reunion(
                 cliente=f"{nombre} {apellidoP} {apellidoM}".strip(),
@@ -934,15 +821,17 @@ El día
 Equipo Corporativo Vicente Blas SAS DE CV
             """
 
-            # Enviar correos en segundo plano
-            try:
-                thread = Thread(target=enviar_correo_async, args=(app, email, "✅ Confirmación de tu sesión informativa", cuerpo_mensaje))
-                thread.start()
-            except Exception as mail_error:
-                logger.error(f"Error al programar correo confirmación: {mail_error}")
+            mensaje_cliente = Message(
+                subject="✅ Confirmación de tu sesión informativa",
+                recipients=[email],
+                body=cuerpo_mensaje
+            )
+            mail.send(mensaje_cliente)
 
-            try:
-                cuerpo_interno = f"""
+            mensaje_interno = Message(
+                subject=f"📩 Nuevo registro de cliente: {nombre} {apellidoP}",
+                recipients=['corporativovbdb2025@gmail.com'],
+                body=f"""
 Nuevo cliente registrado en el sistema:
 
 Nombre: {nombre} {apellidoP} {apellidoM}
@@ -953,10 +842,8 @@ Nombre: {nombre} {apellidoP} {apellidoM}
 
 {cuerpo_mensaje}
                 """
-                thread = Thread(target=enviar_correo_async, args=(app, 'corporativovbdb2025@gmail.com', f"📩 Nuevo registro de cliente: {nombre} {apellidoP}", cuerpo_interno))
-                thread.start()
-            except Exception as mail_error:
-                logger.error(f"Error al programar correo interno: {mail_error}")
+            )
+            mail.send(mensaje_interno)
 
             return redirect(url_for('envio', cliente_id=nuevo_cliente.idCliente, fecha=fecha, hora=hora))
 
@@ -964,9 +851,6 @@ Nombre: {nombre} {apellidoP} {apellidoM}
 
     except Exception as e:
         db.session.rollback()
-        logger.error(f"❌ ERROR en guardar_cliente: {str(e)}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
         return f"❌ Error al guardar cliente: {e}"
 
 @app.route('/inicio')
@@ -1066,17 +950,20 @@ def nuevo_paquete():
             imagen_drive = request.form.get('imagen_drive', '')
             imagen = ''
 
+            # Prioridad: 1. Google Drive, 2. URL normal
             if imagen_drive:
                 imagen = convert_google_drive_url(imagen_drive)
             elif imagen_url:
                 imagen = imagen_url
 
+            # ✅ CONVERSIÓN SEGURA DEL PRECIO
             try:
                 precio = float(precio_str.replace(',', '').replace('$', '').strip())
             except ValueError:
                 flash('Formato de precio inválido', 'error')
                 return render_template('form_paquete.html', paquete=None)
 
+            # ✅ CONVERSIÓN SEGURA DE FECHAS
             try:
                 fecha_inicio_obj = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
                 fecha_final_obj = datetime.strptime(fecha_final, '%Y-%m-%d').date()
@@ -1118,6 +1005,7 @@ def editar_paquete(id):
         try:
             paquete.Nombre = request.form['nombre']
             
+            # ✅ CONVERSIÓN SEGURA DE CALIFICACIÓN
             try:
                 paquete.Calificacion = float(request.form['calificacion']) if request.form['calificacion'] else 0.0
             except ValueError:
@@ -1127,6 +1015,7 @@ def editar_paquete(id):
             paquete.Promocion = request.form['promocion']
             paquete.Destino = request.form['destino']
 
+            # ✅ CONVERSIÓN SEGURA DEL PRECIO
             precio_str = request.form['precio']
             try:
                 paquete.Precio = float(precio_str.replace(',', '').replace('$', '').strip())
@@ -1134,9 +1023,10 @@ def editar_paquete(id):
                 flash('Formato de precio inválido', 'error')
                 return render_template('form_paquete.html', paquete=paquete)
 
+            # ✅ CONVERSIÓN SEGURA DE FECHAS
             try:
-                paquete.Fecha_Inicio = datetime.strptime(request.form['fecha_inicio'], '%Y-%m-%d').date()
-                paquete.Fecha_Final = datetime.strptime(request.form['fecha_final'], '%Y-%m-%d').date()
+                paquete.Fecha_Inicio = datetime.strptime(request.form['fecha_inicio', '%Y-%m-%d']).date()
+                paquete.Fecha_Final = datetime.strptime(request.form['fecha_final', '%Y-%m-%d']).date()
             except ValueError as e:
                 flash(f'Formato de fecha inválido: {str(e)}', 'error')
                 return render_template('form_paquete.html', paquete=paquete)
@@ -1144,6 +1034,7 @@ def editar_paquete(id):
             imagen_url = request.form.get('imagen_url', '')
             imagen_drive = request.form.get('imagen_drive', '')
 
+            # Solo actualizar la imagen si se proporciona una nueva
             if imagen_drive:
                 paquete.Imagen = convert_google_drive_url(imagen_drive)
             elif imagen_url:
@@ -1213,53 +1104,21 @@ def enviar_whatsapp():
         flash(f'Error al generar enlaces: {str(e)}', 'error')
         return redirect(url_for('mostrar_paquetes'))
 
-# Ruta para servir archivos subidos
+# Ruta para servir archivos subidos (solo para desarrollo local)
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
+    # En Railway, esta ruta no debería usarse ya que no se suben archivos
     if os.environ.get('RAILWAY_ENVIRONMENT'):
         return "Funcionalidad de subida de archivos no disponible en producción", 404
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-# Nuevos endpoints para testing
-@app.route('/test-mailgun')
-def test_mailgun():
-    """Endpoint para probar Mailgun"""
+# Limpieza automática al iniciar la aplicación
+with app.app_context():
     try:
-        resultado = enviar_correo(
-            'corporativovbdb2025@gmail.com',
-            '🚀 Test Mailgun desde Railway',
-            'Este es un email de prueba usando Mailgun API\n\n'
-            f'📅 Hora: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n'
-            f'🌐 Entorno: {os.environ.get("RAILWAY_ENVIRONMENT", "Desconocido")}'
-        )
-        
-        return jsonify({
-            'success': resultado,
-            'message': '✅ Email enviado correctamente' if resultado else '❌ Error enviando email',
-            'timestamp': datetime.now().isoformat()
-        })
-        
+        num = limpiar_fechas_antiguas()
+        logger.info(f"Aplicación iniciada. Se eliminaron {num} fechas antiguas automáticamente")
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'timestamp': datetime.now().isoformat()
-        }), 500
-
-@app.route('/mailgun-config')
-def mailgun_config():
-    """Verificar configuración de Mailgun"""
-    config = {
-        'MAIL_SERVER': app.config.get('MAIL_SERVER'),
-        'MAIL_PORT': app.config.get('MAIL_PORT'),
-        'MAIL_USERNAME': app.config.get('MAIL_USERNAME'),
-        'MAIL_PASSWORD_SET': bool(app.config.get('MAIL_PASSWORD')),
-        'MAIL_USE_TLS': app.config.get('MAIL_USE_TLS'),
-        'MAIL_DEFAULT_SENDER': app.config.get('MAIL_DEFAULT_SENDER'),
-        'MAILGUN_API_KEY_SET': bool(os.environ.get('MAILGUN_API_KEY')),
-        'MAILGUN_DOMAIN': os.environ.get('MAILGUN_DOMAIN')
-    }
-    return jsonify(config)
+        logger.error(f"Error en limpieza inicial de fechas: {e}")
 
 if __name__ == '__main__':
     app.secret_key = 'super_secret_key'
