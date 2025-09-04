@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request, redirect, url_for, flash, send_from_directory
+from flask import Flask, render_template, jsonify, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_mail import Mail, Message
 from sqlalchemy import text, desc, and_
@@ -7,46 +7,33 @@ from werkzeug.utils import secure_filename
 import os
 import urllib.parse
 import logging
-import pytz
-from apscheduler.schedulers.background import BackgroundScheduler
-import atexit
-from threading import Thread
-import smtplib
-import time as time_module
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 
-# Configuración básica de logging
+# Configuración básica de l
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', '7a3e8b1f45c9d2e6a7b4c8f3e1d9a2b5c7e3f8a1d4b9e6c2a5f8e3b1d7c9a4e6')
 
-# Configuración de la base de datos Railway
+# Configuración de la base de datos Railway (nuevas credenciales)
 app.config['SQLALCHEMY_DATABASE_URI'] = (
     'mysql+pymysql://root:VHYZwwkmTYmGQAfwKiQGBwHAlpZcesIQ@gondola.proxy.rlwy.net:24406/railway'
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Configuración de correo Gmail - CONFIGURACIÓN DIRECTA
+# Configuración de correo
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USE_SSL'] = False
 app.config['MAIL_USERNAME'] = 'corporativovbdb2025@gmail.com'
-app.config['MAIL_PASSWORD'] = 'dhsx aymo egpz wuea'  # NUEVA CONTRASEÑA DE APLICACIÓN
+app.config['MAIL_PASSWORD'] = 'aizr awfd qgug udjb'
 app.config['MAIL_DEFAULT_SENDER'] = 'corporativovbdb2025@gmail.com'
-app.config['MAIL_TIMEOUT'] = 30
-app.config['MAIL_DEBUG'] = False
 
-# Configuración para subida de archivos (DESHABILITADA para Railway)
+# Configuración para subida de archivos
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 
-# Crear directorio de uploads si no existe (solo para desarrollo local)
-if os.environ.get('RAILWAY_ENVIRONMENT') is None:
-    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+# Crear directorio de uploads si no existe
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 db = SQLAlchemy(app)
 mail = Mail(app)
@@ -129,196 +116,17 @@ def limpiar_fechas_antiguas():
         logger.error(f"Error al limpiar fechas antiguas: {e}")
         return 0
 
-def limpieza_automatica_mexico():
-    """Ejecuta la limpieza de fechas a las 00:00 hora de México"""
-    try:
-        # Obtener la hora actual en zona horaria de México
-        zona_mexico = pytz.timezone('America/Mexico_City')
-        ahora_mexico = datetime.now(zona_mexico)
-        
-        logger.info(f"⏰ Verificando limpieza programada. Hora en México: {ahora_mexico.strftime('%Y-%m-%d %H:%M:%S')}")
-        
-        # Ejecutar limpieza solo entre 00:00 and 00:05 hora de México
-        if ahora_mexico.hour == 0 and ahora_mexico.minute <= 5:
-            num_eliminadas = limpiar_fechas_antiguas()
-            logger.info(f"✅ Limpieza automática completada. Fechas eliminadas: {num_eliminadas}")
-            return num_eliminadas
-        else:
-            logger.info("🕒 No es hora de limpieza automática")
-            return 0
-            
-    except Exception as e:
-        logger.error(f"❌ Error en limpieza automática: {e}")
-        return 0
-
-def allowed_file(filename):
-    """Verifica si la extensión del archivo está permitida"""
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
-
-def convert_google_drive_url(url):
-    """Convierte un enlace de Google Drive a un enlace directo de imagen"""
-    if not url or 'drive.google.com' not in url:
-        return url
-    
-    if 'uc?id=' in url:
-        file_id = url.split('uc?id=')[1].split('&')[0]
-        return f"https://drive.google.com/thumbnail?id={file_id}&sz=w1000"
-    
-    if 'file/d/' in url:
-        parts = url.split('/')
-        try:
-            file_id_index = parts.index('d') + 1
-            if file_id_index < len(parts):
-                file_id = parts[file_id_index]
-                return f"https://drive.google.com/thumbnail?id={file_id}&sz=w1000"
-        except (ValueError, IndexError):
-            pass
-    
-    return url
-
-def enviar_correo_gmail(destinatario, asunto, cuerpo):
-    """Función robusta para enviar emails con Gmail en Railway"""
-    max_intentos = 3
-    intento = 1
-    
-    while intento <= max_intentos:
-        try:
-            logger.info(f"📧 Intentando enviar correo a {destinatario} (intento {intento}/{max_intentos})")
-            
-            # Configuración de Gmail - USAR LA NUEVA CONTRASEÑA
-            gmail_user = 'corporativovbdb2025@gmail.com'
-            gmail_password = 'dhsx aymo egpz wuea'  # NUEVA CONTRASEÑA
-            
-            # Crear mensaje
-            msg = MIMEMultipart()
-            msg['From'] = gmail_user
-            msg['To'] = destinatario
-            msg['Subject'] = asunto
-            msg.attach(MIMEText(cuerpo, 'plain'))
-            
-            # Intentar puerto 465 con SSL primero (más confiable en entornos cloud)
-            try:
-                server = smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=15)
-                server.ehlo()
-                server.login(gmail_user, gmail_password)
-                server.sendmail(gmail_user, destinatario, msg.as_string())
-                server.quit()
-                logger.info("✅ Correo enviado exitosamente via puerto 465 (SSL)")
-                return True
-            except Exception as e:
-                logger.warning(f"⚠️ Puerto 465 falló: {e}")
-                
-                # Intentar puerto 587 con TLS como respaldo
-                try:
-                    server = smtplib.SMTP('smtp.gmail.com', 587, timeout=15)
-                    server.ehlo()
-                    server.starttls()
-                    server.ehlo()
-                    server.login(gmail_user, gmail_password)
-                    server.sendmail(gmail_user, destinatario, msg.as_string())
-                    server.quit()
-                    logger.info("✅ Correo enviado exitosamente via puerto 587 (TLS)")
-                    return True
-                except Exception as e2:
-                    logger.warning(f"⚠️ Puerto 587 también falló: {e2}")
-                    raise Exception(f"Ambos puertos fallaron: 465={e}, 587={e2}")
-                    
-        except Exception as e:
-            logger.error(f"❌ Error en intento {intento}: {e}")
-            if intento == max_intentos:
-                logger.error("🔥 Todos los intentos fallaron")
-                return False
-            intento += 1
-            time_module.sleep(5)  # Esperar 5 segundos entre intentos
-    
-    return False
-
-def enviar_correo_async(app, destinatario, asunto, cuerpo):
-    """Envía correos en segundo plano"""
-    with app.app_context():
-        return enviar_correo_gmail(destinatario, asunto, cuerpo)
-
-# ✅ FILTRO CORREGIDO
-@app.template_filter('ensure_public_image')
-def ensure_public_image_filter(image_path):
-    if not image_path:
-        return "https://via.placeholder.com/300x180"
-    
-    if image_path.startswith(('http://', 'https://')):
-        return image_path
-    
-    if 'drive.google.com' in image_path:
-        return image_path
-    
-    return "https://via.placeholder.com/300x180"
-
-# === Configuración del programador de tareas ===
-scheduler = BackgroundScheduler()
-scheduler.add_job(func=limpieza_automatica_mexico, trigger='cron', hour='*', minute=0)
-scheduler.start()
-atexit.register(lambda: scheduler.shutdown())
-
-# === Endpoint de diagnóstico de email ===
-@app.route('/debug-email')
-def debug_email():
-    """Endpoint completo para debuguear email"""
-    try:
-        # Mostrar configuración actual (ocultando password)
-        config = {
-            'MAIL_SERVER': app.config.get('MAIL_SERVER'),
-            'MAIL_PORT': app.config.get('MAIL_PORT'),
-            'MAIL_USE_TLS': app.config.get('MAIL_USE_TLS'),
-            'MAIL_USERNAME': app.config.get('MAIL_USERNAME'),
-            'MAIL_PASSWORD_SET': bool(app.config.get('MAIL_PASSWORD')),
-            'MAIL_DEFAULT_SENDER': app.config.get('MAIL_DEFAULT_SENDER'),
-            'RAILWAY_ENVIRONMENT': os.environ.get('RAILWAY_ENVIRONMENT')
-        }
-        
-        # Test de envío de correo de prueba
-        email_status = ""
-        try:
-            resultado = enviar_correo_gmail(
-                'corporativovbdb2025@gmail.com',
-                '✅ Test Email from Railway',
-                'This is a test email from your Railway app'
-            )
-            if resultado:
-                email_status = "✅ Email de prueba enviado exitosamente"
-            else:
-                email_status = "❌ Error enviando email"
-        except Exception as email_error:
-            email_status = f"❌ Error enviando email: {email_error}"
-        
-        return jsonify({
-            'status': 'diagnostic_complete',
-            'email_test': email_status,
-            'config': config
-        })
-        
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': str(e),
-            'config': {
-                'MAIL_SERVER': app.config.get('MAIL_SERVER'),
-                'MAIL_PORT': app.config.get('MAIL_PORT'),
-                'MAIL_USE_TLS': app.config.get('MAIL_USE_TLS'),
-                'MAIL_USERNAME': app.config.get('MAIL_USERNAME'),
-                'MAIL_PASSWORD_SET': bool(app.config.get('MAIL_PASSWORD')),
-                'MAIL_DEFAULT_SENDER': app.config.get('MAIL_DEFAULT_SENDER')
-            }
-        }), 500
-
 # === Endpoints de Fechas ===
 
 @app.route('/api/fechas/count')
 def contar_fechas():
+    limpiar_fechas_antiguas()
     count = db.session.execute(text("SELECT COUNT(*) FROM Fechas")).scalar()
     return jsonify({'count': count})
 
 @app.route('/api/fechas/proximas')
 def fechas_proximas():
+    limpiar_fechas_antiguas()
     hoy = date.today()
     fechas = Fecha.query.filter(Fecha.Fecha >= hoy).order_by(Fecha.Fecha).limit(5).all()
     return jsonify([{
@@ -328,6 +136,7 @@ def fechas_proximas():
 
 @app.route('/api/fechas', methods=['GET'])
 def listar_fechas():
+    limpiar_fechas_antiguas()
     fechas = Fecha.query.order_by(Fecha.Fecha).all()
     return jsonify([{
         'idFechas': f.idFechas,
@@ -340,6 +149,7 @@ def crear_fecha():
     try:
         fecha_input = datetime.strptime(data['Fecha'], '%Y-%m-%d').date()
         
+        # Verificar si la fecha ya existe
         fecha_existente = Fecha.query.filter_by(Fecha=fecha_input).first()
         if fecha_existente:
             return jsonify({
@@ -370,6 +180,7 @@ def actualizar_fecha(id):
     try:
         nueva_fecha_input = datetime.strptime(data['Fecha'], '%Y-%m-%d').date()
         
+        # Verificar si la nueva fecha ya existe (excluyendo la fecha actual)
         fecha_existente = Fecha.query.filter(
             and_(
                 Fecha.Fecha == nueva_fecha_input,
@@ -454,6 +265,7 @@ def crear_hora():
         hora_str = data['Hora']
         hora_obj = datetime.strptime(hora_str, '%H:%M').time()
         
+        # Verificar si la hora ya existe
         hora_existente = Hora.query.filter_by(Hora=hora_obj).first()
         if hora_existente:
             return jsonify({
@@ -486,6 +298,7 @@ def actualizar_hora(id):
         nueva_hora_str = data['Hora']
         nueva_hora_obj = datetime.strptime(nueva_hora_str, '%H:%M').time()
         
+        # Verificar si la nueva hora ya existe (excluyendo la hora actual)
         hora_existente = Hora.query.filter(
             and_(
                 Hora.Hora == nueva_hora_obj,
@@ -535,68 +348,52 @@ def contar_clientes():
 
 @app.route('/api/clientes/recientes')
 def clientes_recientes():
-    clientes = db.session.query(Cliente, Prospecto).join(
-        Prospecto, Cliente.Prospecto_idProspecto == Prospecto.idProspecto
-    ).order_by(desc(Cliente.idCliente)).limit(5).all()
-    
+    clientes = Cliente.query.order_by(desc(Cliente.idCliente)).limit(5).all()
     return jsonify([{
-        'id': c.Cliente.idCliente,
-        'nombre': c.Cliente.Nombre,
-        'apellido_p': c.Cliente.Apellido_P,
-        'apellido_m': c.Cliente.Apellido_M,
-        'email': c.Cliente.Email,
-        'tipo_prospecto': c.Prospecto.Tipo_Prospecto
+        'id': c.idCliente,
+        'nombre': c.Nombre,
+        'apellido_p': c.Apellido_P,
+        'apellido_m': c.Apellido_M,
+        'email': c.Email
     } for c in clientes])
 
 @app.route('/api/clientes', methods=['GET'])
 def listar_clientes():
-    clientes = db.session.query(Cliente, Prospecto).join(
-        Prospecto, Cliente.Prospecto_idProspecto == Prospecto.idProspecto
-    ).order_by(Cliente.idCliente).all()
-    
+    clientes = Cliente.query.order_by(Cliente.idCliente).all()
     return jsonify([{
-        'idCliente': c.Cliente.idCliente,
-        'Nombre': c.Cliente.Nombre,
-        'Apellido_P': c.Cliente.Apellido_P,
-        'Apellido_M': c.Cliente.Apellido_M,
-        'Telefono': c.Cliente.Telefono,
-        'Email': c.Cliente.Email,
-        'Tipo_Prospecto': c.Prospecto.Tipo_Prospecto
+        'idCliente': c.idCliente,
+        'Nombre': c.Nombre,
+        'Apellido_P': c.Apellido_P,
+        'Apellido_M': c.Apellido_M,
+        'Telefono': c.Telefono,
+        'Email': c.Email
     } for c in clientes])
 
 @app.route('/api/clientes', methods=['POST'])
 def crear_cliente():
     data = request.get_json()
     try:
-        tipo_cliente = data.get('tipo', 'interesado')
-        prospecto_id = 2 if tipo_cliente == 'cotizador' else 1
-            
         nuevo_cliente = Cliente(
             Nombre=data['Nombre'],
             Apellido_P=data['Apellido_P'],
             Apellido_M=data.get('Apellido_M', ''),
             Telefono=data['Telefono'],
             Email=data['Email'],
-            Prospecto_idProspecto=prospecto_id,
+            Prospecto_idProspecto=1,
             Pais_idPais=1
         )
         db.session.add(nuevo_cliente)
         db.session.commit()
-        
-        prospecto = Prospecto.query.get(prospecto_id)
-        
         return jsonify({
             'success': True, 
-            'message': 'Cliente creada correctamente',
+            'message': 'Cliente creado correctamente',
             'nuevoCliente': {
                 'idCliente': nuevo_cliente.idCliente,
                 'Nombre': nuevo_cliente.Nombre,
                 'Apellido_P': nuevo_cliente.Apellido_P,
                 'Apellido_M': nuevo_cliente.Apellido_M,
                 'Telefono': nuevo_cliente.Telefono,
-                'Email': nuevo_cliente.Email,
-                'tipo': tipo_cliente,
-                'Tipo_Prospecto': prospecto.Tipo_Prospecto if prospecto else tipo_cliente
+                'Email': nuevo_cliente.Email
             }
         })
     except Exception as e:
@@ -608,34 +405,13 @@ def actualizar_cliente(id):
     cliente = Cliente.query.get_or_404(id)
     data = request.get_json()
     try:
-        tipo_cliente = data.get('tipo', 'interesado')
-        prospecto_id = 2 if tipo_cliente == 'cotizador' else 1
-            
         cliente.Nombre = data['Nombre']
         cliente.Apellido_P = data['Apellido_P']
         cliente.Apellido_M = data.get('Apellido_M', '')
         cliente.Telefono = data['Telefono']
         cliente.Email = data['Email']
-        cliente.Prospecto_idProspecto = prospecto_id
-        
         db.session.commit()
-        
-        prospecto = Prospecto.query.get(prospecto_id)
-        
-        return jsonify({
-            'success': True, 
-            'message': 'Cliente actualizada correctamente',
-            'clienteActualizado': {
-                'idCliente': cliente.idCliente,
-                'Nombre': cliente.Nombre,
-                'Apellido_P': cliente.Apellido_P,
-                'Apellido_M': cliente.Apellido_M,
-                'Telefono': cliente.Telefono,
-                'Email': cliente.Email,
-                'tipo': tipo_cliente,
-                'Tipo_Prospecto': prospecto.Tipo_Prospecto if prospecto else tipo_cliente
-            }
-        })
+        return jsonify({'success': True, 'message': 'Cliente actualizado correctamente'})
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'message': str(e)}), 400
@@ -646,7 +422,7 @@ def eliminar_cliente(id):
     try:
         db.session.delete(cliente)
         db.session.commit()
-        return jsonify({'success': True, 'message': 'Cliente eliminada correctamente'})
+        return jsonify({'success': True, 'message': 'Cliente eliminado correctamente'})
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'message': str(e)}), 400
@@ -691,6 +467,7 @@ def enviar_invitacion_zoom():
     try:
         data = request.json
         
+        # Validar datos requeridos
         required_fields = ['email', 'nombre', 'subject', 'message', 'fecha', 'hora']
         for field in required_fields:
             if field not in data or not data[field]:
@@ -699,6 +476,7 @@ def enviar_invitacion_zoom():
                     'message': f'El campo {field} es requerido'
                 }), 400
 
+        # Convertir fechas
         try:
             fecha_obj = datetime.strptime(data['fecha'], '%Y-%m-%d').date()
             hora_obj = datetime.strptime(data['hora'], '%H:%M').time()
@@ -708,6 +486,7 @@ def enviar_invitacion_zoom():
                 'message': f'Formato de fecha/hora inválido: {str(e)}'
             }), 400
 
+        # Guardar la reunión en la base de datos
         nueva_reunion = Reunion(
             cliente=data['nombre'],
             email=data['email'],
@@ -719,16 +498,27 @@ def enviar_invitacion_zoom():
         db.session.add(nueva_reunion)
         db.session.commit()
 
-        # Enviar correo al cliente (async)
+        # Enviar correo al cliente
         try:
-            thread = Thread(target=enviar_correo_async, args=(app, data['email'], data['subject'], data['message']))
-            thread.start()
+            msg_cliente = Message(
+                subject=data['subject'],
+                recipients=[data['email']],
+                body=data['message']
+            )
+            mail.send(msg_cliente)
         except Exception as mail_error:
-            logger.error(f"Error al programar correo: {mail_error}")
+            db.session.rollback()
+            return jsonify({
+                'success': False,
+                'message': f'Error al enviar correo: {str(mail_error)}'
+            }), 500
 
-        # Enviar copia al administrador (async)
+        # Enviar copia al administrador
         try:
-            cuerpo_admin = f"""Se envió invitación a Zoom a:
+            msg_admin = Message(
+                subject=f"Copia: {data['subject']}",
+                recipients=['corporativovbdb2025@gmail.com'],
+                body=f"""Se envió invitación a Zoom a:
 
 Nombre: {data['nombre']}
 Email: {data['email']}
@@ -736,10 +526,10 @@ Email: {data['email']}
 Mensaje enviado:
 {data['message']}
 """
-            thread = Thread(target=enviar_correo_async, args=(app, 'corporativovbdb2025@gmail.com', f"Copia: {data['subject']}", cuerpo_admin))
-            thread.start()
+            )
+            mail.send(msg_admin)
         except Exception:
-            pass
+            pass  # No hacemos rollback si falla solo el correo al admin
 
         return jsonify({
             'success': True,
@@ -804,9 +594,6 @@ def get_horas(id_fecha):
 
 @app.route('/guardar_cliente', methods=['POST'])
 def guardar_cliente():
-    logger.info("🔵🔵🔵 INICIANDO guardar_cliente 🔵🔵🔵")
-    logger.info(f"Form data: {dict(request.form)}")
-    
     try:
         nombre = request.form['nombre']
         apellidoP = request.form['apellidoP']
@@ -819,11 +606,8 @@ def guardar_cliente():
         fecha = request.form.get('fecha')
         hora = request.form.get('hora')
 
-        logger.info(f"📋 Datos recibidos: {nombre} {apellidoP}, tipo: {tipo_cliente}, fecha: {fecha}, hora: {hora}")
-
         prospecto = Prospecto.query.filter_by(Tipo_Prospecto=tipo_cliente).first()
         if not prospecto:
-            logger.error(f"❌ Tipo de prospecto '{tipo_cliente}' no encontrado.")
             return f"❌ Tipo de prospecto '{tipo_cliente}' no encontrado."
 
         pais_existente = Pais.query.filter_by(pais=pais_nombre).first()
@@ -848,68 +632,23 @@ def guardar_cliente():
         db.session.add(nuevo_cliente)
         db.session.commit()
 
-        logger.info(f"✅ Cliente guardado exitosamente: ID {nuevo_cliente.idCliente}")
-
-        if tipo_cliente.lower() == "cotizador":
-            cuerpo_mensaje_cliente = f"""
-Hola {nombre},
-
-Gracias por tu interés en nuestros paquetes de viaje. Te mantendremos informado sobre 
-nuevos paquetes, promociones y ofertas especiales que puedan ser de tu interés.
-
-Pronto recibirás información sobre nuestros destinos y paquetes disponibles.
-
-¡Esperamos poder ayudarte a planificar tu próximo viaje!
-
-Equipo Corporativo Vicente Blas SAS DE CV
-            """
-
-            cuerpo_mensaje_admin = f"""
-Nuevo cliente interesado en paquetes registrado en el sistema:
-
-Nombre: {nombre} {apellidoP} {apellidoM}
-📞 Teléfono: {telefono}
-📧 Email: {email}
-🌎 País: {pais_nombre}
-👤 Tipo de prospecto: {tipo_cliente}
-
-Este cliente está interesado en recibir información sobre paquetes de viaje.
-            """
-
-            # Enviar correos en segundo plano
-            try:
-                thread = Thread(target=enviar_correo_async, args=(app, email, "✅ Registro exitoso - Información de paquetes", cuerpo_mensaje_cliente))
-                thread.start()
-            except Exception as mail_error:
-                logger.error(f"Error al programar correo cliente: {mail_error}")
-
-            try:
-                thread = Thread(target=enviar_correo_async, args=(app, 'corporativovbdb2025@gmail.com', f"📦 Nuevo cliente interesado en paquetes: {nombre} {apellidoP}", cuerpo_mensaje_admin))
-                thread.start()
-            except Exception as mail_error:
-                logger.error(f"Error al programar correo admin: {mail_error}")
-
+        if tipo_cliente.lower() in ["cotización", "cotizador"]:
             return redirect(url_for('mostrar_paquetes'))
 
-        elif tipo_cliente.lower() == "interesado en crear tu agencia":
-            if not fecha or not hora:
-                logger.error("❌ Fecha y hora requeridas para reuniones")
-                return "❌ Fecha y hora son requeridas para agendar reunión", 400
-
-            try:
-                fecha_obj = datetime.strptime(fecha, '%Y-%m-%d').date()
-            except ValueError as e:
-                logger.error(f"❌ Formato de fecha inválido: {fecha}. Error: {str(e)}")
-                return f"❌ Formato de fecha inválido: {fecha}", 400
+        elif tipo_cliente.lower() == "agente de viajes":
+            # Guardar la reunión en la tabla Reuniones
+            fecha_obj = datetime.strptime(fecha, '%Y-%m-%d').date()
             
+            # Manejo robusto de la conversión de hora
             try:
+                # Primero intentamos con formato HH:MM
                 hora_obj = datetime.strptime(hora, '%H:%M').time()
             except ValueError:
                 try:
+                    # Si falla, intentamos con formato HH:MM:SS
                     hora_obj = datetime.strptime(hora, '%H:%M:%S').time()
                 except ValueError as e:
-                    logger.error(f"❌ Formato de hora no válido: {hora}. Error: {str(e)}")
-                    return f"❌ Formato de hora no válido: {hora}", 400
+                    return f"❌ Formato de hora no válido: {hora}. Error: {str(e)}"
             
             nueva_reunion = Reunion(
                 cliente=f"{nombre} {apellidoP} {apellidoM}".strip(),
@@ -924,7 +663,7 @@ Este cliente está interesado en recibir información sobre paquetes de viaje.
             cuerpo_mensaje = f"""
 Hola {nombre},
 
-Gracias por registrarte a nuestra sesión informativa para agentes de viajes con Vicente Blas Benitez.
+Gracias por registrarte a nuestra sesión informativa para agentes de viajes con el Señor Vicente Blas Sanchez.
 El día
 📅 Fecha: {fecha}
 ⏰ Hora: {hora}
@@ -935,15 +674,17 @@ El día
 Equipo Corporativo Vicente Blas SAS DE CV
             """
 
-            # Enviar correos en segundo plano
-            try:
-                thread = Thread(target=enviar_correo_async, args=(app, email, "✅ Confirmación de tu sesión informativa", cuerpo_mensaje))
-                thread.start()
-            except Exception as mail_error:
-                logger.error(f"Error al programar correo confirmación: {mail_error}")
+            mensaje_cliente = Message(
+                subject="✅ Confirmación de tu sesión informativa",
+                recipients=[email],
+                body=cuerpo_mensaje
+            )
+            mail.send(mensaje_cliente)
 
-            try:
-                cuerpo_interno = f"""
+            mensaje_interno = Message(
+                subject=f"📩 Nuevo registro de cliente: {nombre} {apellidoP}",
+                recipients=['corporativovbdb2025@gmail.com'],
+                body=f"""
 Nuevo cliente registrado en el sistema:
 
 Nombre: {nombre} {apellidoP} {apellidoM}
@@ -954,10 +695,8 @@ Nombre: {nombre} {apellidoP} {apellidoM}
 
 {cuerpo_mensaje}
                 """
-                thread = Thread(target=enviar_correo_async, args=(app, 'corporativovbdb2025@gmail.com', f"📩 Nuevo registro de cliente: {nombre} {apellidoP}", cuerpo_interno))
-                thread.start()
-            except Exception as mail_error:
-                logger.error(f"Error al programar correo interno: {mail_error}")
+            )
+            mail.send(mensaje_interno)
 
             return redirect(url_for('envio', cliente_id=nuevo_cliente.idCliente, fecha=fecha, hora=hora))
 
@@ -965,9 +704,6 @@ Nombre: {nombre} {apellidoP} {apellidoM}
 
     except Exception as e:
         db.session.rollback()
-        logger.error(f"❌ ERROR en guardar_cliente: {str(e)}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
         return f"❌ Error al guardar cliente: {e}"
 
 @app.route('/inicio')
@@ -1005,10 +741,10 @@ def envio():
         return "Cliente no encontrado", 404
 
     pais_obj = Pais.query.filter_by(idPais=cliente.Pais_idPais).first()
-    prospecto_obj = Prospecto.query.filter_by(idProspecto=cliente.Prospecto_idProspecto).first()
 
     enlace_zoom = "https://us06web.zoom.us/j/81971641072"
-    tipo = prospecto_obj.Tipo_Prospecto if prospecto_obj else ''
+    prospecto = Prospecto.query.filter_by(idProspecto=cliente.Prospecto_idProspecto).first()
+    tipo = prospecto.Tipo_Prospecto if prospecto else ''
 
     return render_template('envio.html',
                            nombre=cliente.Nombre,
@@ -1053,111 +789,79 @@ def form_paquete():
 
 @app.route('/paquete/nuevo', methods=['GET', 'POST'])
 def nuevo_paquete():
+    paquetes = Paquete.query.order_by(Paquete.Fecha_Inicio).all()
+    clientes = Cliente.query.order_by(Cliente.Nombre).all()
     if request.method == 'POST':
-        try:
-            nombre = request.form['nombre']
-            calificacion = request.form['calificacion']
-            promocion = request.form['promocion']
-            destino = request.form['destino']
-            precio_str = request.form['precio']
-            fecha_inicio = request.form['fecha_inicio']
-            fecha_final = request.form['fecha_final']
+        nombre = request.form['nombre']
+        calificacion = request.form['calificacion']
+        promocion = request.form['promocion']
+        destino = request.form['destino']
+        precio_str = request.form['precio']
+        fecha_inicio = request.form['fecha_inicio']
+        fecha_final = request.form['fecha_final']
 
-            imagen_url = request.form.get('imagen_url', '')
-            imagen_drive = request.form.get('imagen_drive', '')
-            imagen = ''
+        imagen_url = request.form['imagen_url'].strip()
+        imagen_archivo = request.files['imagen_archivo']
+        imagen = ''
 
-            if imagen_drive:
-                imagen = convert_google_drive_url(imagen_drive)
-            elif imagen_url:
-                imagen = imagen_url
+        if imagen_archivo and imagen_archivo.filename:
+            filename = secure_filename(imagen_archivo.filename)
+            ruta = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            imagen_archivo.save(ruta)
+            imagen = '/' + ruta
+        elif imagen_url:
+            imagen = imagen_url
 
-            try:
-                precio = float(precio_str.replace(',', '').replace('$', '').strip())
-            except ValueError:
-                flash('Formato de precio inválido', 'error')
-                return render_template('form_paquete.html', paquete=None)
+        precio = float(precio_str.replace(',', ''))
 
-            try:
-                fecha_inicio_obj = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
-                fecha_final_obj = datetime.strptime(fecha_final, '%Y-%m-%d').date()
-            except ValueError as e:
-                flash(f'Formato de fecha inválido: {str(e)}', 'error')
-                return render_template('form_paquete.html', paquete=None)
+        nuevo = Paquete(
+            Nombre=nombre,
+            Calificacion=calificacion,
+            Promocion=promocion,
+            Imagen=imagen,
+            Destino=destino,
+            Precio=precio,
+            Fecha_Inicio=datetime.strptime(fecha_inicio, '%Y-%m-%d'),
+            Fecha_Final=datetime.strptime(fecha_final, '%Y-%m-%d')
+        )
+        db.session.add(nuevo)
+        db.session.commit()
+        return render_template('Pack.html', paquetes=paquetes, clientes=clientes)
 
-            nuevo = Paquete(
-                Nombre=nombre,
-                Calificacion=float(calificacion) if calificacion else 0.0,
-                Promocion=promocion,
-                Imagen=imagen,
-                Destino=destino,
-                Precio=precio,
-                Fecha_Inicio=fecha_inicio_obj,
-                Fecha_Final=fecha_final_obj
-            )
-            
-            db.session.add(nuevo)
-            db.session.commit()
-            flash('Paquete creado correctamente', 'success')
-            return redirect(url_for('pack'))
-            
-        except Exception as e:
-            db.session.rollback()
-            return f"ERROR EN NUEVO_PAQUETE: {str(e)}<br>TYPE: {type(e).__name__}"
-    
     return render_template('form_paquete.html', paquete=None)
 
 @app.route('/paquete/editar/<int:id>', methods=['GET', 'POST'])
 def editar_paquete(id):
-    try:
-        paquete = Paquete.query.get_or_404(id)
-    except Exception as e:
-        flash('Paquete no encontrado', 'error')
-        return redirect(url_for('pack'))
+    paquetes = Paquete.query.order_by(Paquete.Fecha_Inicio).all()
+    clientes = Cliente.query.order_by(Cliente.Nombre).all()
+    paquete = Paquete.query.get_or_404(id)
 
     if request.method == 'POST':
-        try:
-            paquete.Nombre = request.form['nombre']
-            
-            try:
-                paquete.Calificacion = float(request.form['calificacion']) if request.form['calificacion'] else 0.0
-            except ValueError:
-                flash('Formato de calificación inválido', 'error')
-                return render_template('form_paquete.html', paquete=paquete)
-                
-            paquete.Promocion = request.form['promocion']
-            paquete.Destino = request.form['destino']
+        paquete.Nombre = request.form['nombre']
+        paquete.Calificacion = request.form['calificacion']
+        paquete.Promocion = request.form['promocion']
+        paquete.Destino = request.form['destino']
 
-            precio_str = request.form['precio']
-            try:
-                paquete.Precio = float(precio_str.replace(',', '').replace('$', '').strip())
-            except ValueError:
-                flash('Formato de precio inválido', 'error')
-                return render_template('form_paquete.html', paquete=paquete)
+        precio_str = request.form['precio']
+        paquete.Precio = float(precio_str.replace(',', ''))
 
-            try:
-                paquete.Fecha_Inicio = datetime.strptime(request.form['fecha_inicio'], '%Y-%m-%d').date()
-                paquete.Fecha_Final = datetime.strptime(request.form['fecha_final'], '%Y-%m-%d').date()
-            except ValueError as e:
-                flash(f'Formato de fecha inválido: {str(e)}', 'error')
-                return render_template('form_paquete.html', paquete=paquete)
+        paquete.Fecha_Inicio = datetime.strptime(request.form['fecha_inicio'], '%Y-%m-%d')
+        paquete.Fecha_Final = datetime.strptime(request.form['fecha_final'], '%Y-%m-%d')
 
-            imagen_url = request.form.get('imagen_url', '')
-            imagen_drive = request.form.get('imagen_drive', '')
+        imagen_url = request.form['imagen_url'].strip()
+        imagen_archivo = request.files['imagen_archivo']
 
-            if imagen_drive:
-                paquete.Imagen = convert_google_drive_url(imagen_drive)
-            elif imagen_url:
-                paquete.Imagen = imagen_url
+        if imagen_archivo and imagen_archivo.filename:
+            filename = secure_filename(imagen_archivo.filename)
+            ruta = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            imagen_archivo.save(ruta)
+            paquete.Imagen = '/' + ruta
+        elif imagen_url:
+            paquete.Imagen = imagen_url
 
-            db.session.commit()
-            flash('Paquete actualizado correctamente', 'success')
-            return redirect(url_for('pack'))
-            
-        except Exception as e:
-            db.session.rollback()
-            return f"ERROR EN EDITAR_PAQUETE: {str(e)}<br>TYPE: {type(e).__name__}"
-    
+        db.session.commit()
+        return render_template('Pack.html', paquetes=paquetes, clientes=clientes)
+
     return render_template('form_paquete.html', paquete=paquete)
 
 @app.route('/eliminar_paquete/<int:id>', methods=['POST'])
@@ -1166,12 +870,10 @@ def eliminar_paquete(id):
     try:
         db.session.delete(paquete)
         db.session.commit()
-        flash('Paquete eliminado correctamente', 'success')
         return redirect(url_for('pack'))
     except Exception as e:
         db.session.rollback()
-        flash(f'Error al eliminar paquete: {e}', 'error')
-        return redirect(url_for('pack'))
+        return f"❌ Error al eliminar paquete: {e}", 400
 
 @app.route('/enviar_whatsapp', methods=['POST'])
 def enviar_whatsapp():
@@ -1214,12 +916,13 @@ def enviar_whatsapp():
         flash(f'Error al generar enlaces: {str(e)}', 'error')
         return redirect(url_for('mostrar_paquetes'))
 
-# Ruta para servir archivos subidos
-@app.route('/uploads/<path:filename>')
-def uploaded_file(filename):
-    if os.environ.get('RAILWAY_ENVIRONMENT'):
-        return "Funcionalidad de subida de archivos no disponible en producción", 404
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+# Limpieza automática al iniciar la aplicación
+with app.app_context():
+    try:
+        num = limpiar_fechas_antiguas()
+        logger.info(f"Aplicación iniciada. Se eliminaron {num} fechas antiguas automáticamente")
+    except Exception as e:
+        logger.error(f"Error en limpieza inicial de fechas: {e}")
 
 if __name__ == '__main__':
     app.secret_key = 'super_secret_key'
