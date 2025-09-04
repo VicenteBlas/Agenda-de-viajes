@@ -16,6 +16,7 @@ import time as time_module
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import ssl
+import requests
 
 # Configuración básica de logging
 logging.basicConfig(level=logging.INFO)
@@ -179,58 +180,54 @@ def convert_google_drive_url(url):
     return url
 
 def enviar_correo(destinatario, asunto, cuerpo):
-    """Función robusta para enviar emails con Mailgun en Railway"""
-    max_intentos = 2
-    intento = 1
-    
-    while intento <= max_intentos:
-        try:
-            logger.info(f"📧 Intentando enviar correo a {destinatario} (intento {intento}/{max_intentos})")
-            
-            # Configuración desde variables de entorno
-            mail_server = app.config['MAIL_SERVER']
-            mail_port = app.config['MAIL_PORT']
-            mail_username = app.config['MAIL_USERNAME']
-            mail_password = app.config['MAIL_PASSWORD']
-            
-            if not mail_password:
-                logger.error("❌ Password de Mailgun no configurado")
-                # Guardar en log para no perder los emails
-                with open('emails_pendientes.log', 'a') as f:
-                    f.write(f"{datetime.now()}|{destinatario}|{asunto}|{cuerpo[:200]}...\n")
-                return False
-            
-            # Crear mensaje
-            msg = MIMEMultipart()
-            msg['From'] = f"Corporativo Vicente Blas <{app.config['MAIL_DEFAULT_SENDER']}>"
-            msg['To'] = destinatario
-            msg['Subject'] = asunto
-            msg.attach(MIMEText(cuerpo, 'plain'))
-            
-            # Conexión SMTP con Mailgun
-            server = smtplib.SMTP(mail_server, mail_port, timeout=15)
-            server.ehlo()
-            server.starttls()
-            server.ehlo()
-            server.login(mail_username, mail_password)
-            server.sendmail(msg['From'], destinatario, msg.as_string())
-            server.quit()
-            
-            logger.info("✅ Correo enviado exitosamente via Mailgun")
+    """Función para enviar emails usando Mailgun API (más confiable que SMTP)"""
+    try:
+        # Configuración de Mailgun API
+        mailgun_domain = os.environ.get('MAILGUN_DOMAIN', 'sandboxa92ea0efebee474b934033418f510063.mailgun.org')
+        mailgun_api_key = os.environ.get('MAILGUN_API_KEY', '')
+        
+        if not mailgun_api_key:
+            logger.error("❌ API Key de Mailgun no configurado")
+            # Guardar en log para no perder los emails
+            with open('emails_pendientes.log', 'a') as f:
+                f.write(f"{datetime.now()}|{destinatario}|{asunto}|{cuerpo[:200]}...\n")
+            return False
+        
+        # Preparar la solicitud a la API de Mailgun
+        url = f"https://api.mailgun.net/v3/{mailgun_domain}/messages"
+        auth = ("api", mailgun_api_key)
+        
+        data = {
+            "from": f"Corporativo Vicente Blas <mailgun@{mailgun_domain}>",
+            "to": destinatario,
+            "subject": asunto,
+            "text": cuerpo
+        }
+        
+        # Enviar la solicitud
+        response = requests.post(
+            url, 
+            auth=auth, 
+            data=data,
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            logger.info("✅ Correo enviado exitosamente via Mailgun API")
             return True
+        else:
+            logger.error(f"❌ Error Mailgun API: {response.status_code} - {response.text}")
+            # Guardar en log para recuperar después
+            with open('emails_fallidos.log', 'a') as f:
+                f.write(f"{datetime.now()}|{destinatario}|{asunto}|API Error: {response.status_code}\n")
+            return False
             
-        except Exception as e:
-            logger.error(f"❌ Error en intento {intento}: {str(e)}")
-            if intento == max_intentos:
-                logger.error("🔥 Todos los intentos fallaron")
-                # Guardar en log para recuperar después
-                with open('emails_fallidos.log', 'a') as f:
-                    f.write(f"{datetime.now()}|{destinatario}|{asunto}|{str(e)}\n")
-                return False
-            intento += 1
-            time_module.sleep(2)
-    
-    return False
+    except Exception as e:
+        logger.error(f"❌ Error enviando correo via API: {str(e)}")
+        # Guardar en log para recuperar después
+        with open('emails_fallidos.log', 'a') as f:
+            f.write(f"{datetime.now()}|{destinatario}|{asunto}|Exception: {str(e)}\n")
+        return False
 
 def enviar_correo_async(app, destinatario, asunto, cuerpo):
     """Envía correos en segundo plano"""
@@ -270,7 +267,9 @@ def debug_email():
             'MAIL_USERNAME': app.config.get('MAIL_USERNAME'),
             'MAIL_PASSWORD_SET': bool(app.config.get('MAIL_PASSWORD')),
             'MAIL_DEFAULT_SENDER': app.config.get('MAIL_DEFAULT_SENDER'),
-            'RAILWAY_ENVIRONMENT': os.environ.get('RAILWAY_ENVIRONMENT')
+            'RAILWAY_ENVIRONMENT': os.environ.get('RAILWAY_ENVIRONMENT'),
+            'MAILGUN_API_KEY_SET': bool(os.environ.get('MAILGUN_API_KEY')),
+            'MAILGUN_DOMAIN': os.environ.get('MAILGUN_DOMAIN')
         }
         
         # Test de envío de correo de prueba
@@ -279,7 +278,7 @@ def debug_email():
             resultado = enviar_correo(
                 'corporativovbdb2025@gmail.com',
                 '✅ Test Email from Railway',
-                'This is a test email from your Railway app using Mailgun'
+                'This is a test email from your Railway app using Mailgun API'
             )
             if resultado:
                 email_status = "✅ Email de prueba enviado exitosamente"
@@ -304,7 +303,9 @@ def debug_email():
                 'MAIL_USE_TLS': app.config.get('MAIL_USE_TLS'),
                 'MAIL_USERNAME': app.config.get('MAIL_USERNAME'),
                 'MAIL_PASSWORD_SET': bool(app.config.get('MAIL_PASSWORD')),
-                'MAIL_DEFAULT_SENDER': app.config.get('MAIL_DEFAULT_SENDER')
+                'MAIL_DEFAULT_SENDER': app.config.get('MAIL_DEFAULT_SENDER'),
+                'MAILGUN_API_KEY_SET': bool(os.environ.get('MAILGUN_API_KEY')),
+                'MAILGUN_DOMAIN': os.environ.get('MAILGUN_DOMAIN')
             }
         }), 500
 
@@ -1227,7 +1228,7 @@ def test_mailgun():
         resultado = enviar_correo(
             'corporativovbdb2025@gmail.com',
             '🚀 Test Mailgun desde Railway',
-            'Este es un email de prueba usando Mailgun\n\n'
+            'Este es un email de prueba usando Mailgun API\n\n'
             f'📅 Hora: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n'
             f'🌐 Entorno: {os.environ.get("RAILWAY_ENVIRONMENT", "Desconocido")}'
         )
@@ -1254,7 +1255,9 @@ def mailgun_config():
         'MAIL_USERNAME': app.config.get('MAIL_USERNAME'),
         'MAIL_PASSWORD_SET': bool(app.config.get('MAIL_PASSWORD')),
         'MAIL_USE_TLS': app.config.get('MAIL_USE_TLS'),
-        'MAIL_DEFAULT_SENDER': app.config.get('MAIL_DEFAULT_SENDER')
+        'MAIL_DEFAULT_SENDER': app.config.get('MAIL_DEFAULT_SENDER'),
+        'MAILGUN_API_KEY_SET': bool(os.environ.get('MAILGUN_API_KEY')),
+        'MAILGUN_DOMAIN': os.environ.get('MAILGUN_DOMAIN')
     }
     return jsonify(config)
 
