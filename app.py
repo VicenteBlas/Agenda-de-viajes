@@ -15,6 +15,7 @@ import smtplib
 import time as time_module
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import ssl
 
 # Configuración básica de logging
 logging.basicConfig(level=logging.INFO)
@@ -29,14 +30,14 @@ app.config['SQLALCHEMY_DATABASE_URI'] = (
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Configuración de correo Gmail - CONFIGURACIÓN DIRECTA
-app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-app.config['MAIL_PORT'] = 587
-app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USE_SSL'] = False
-app.config['MAIL_USERNAME'] = 'corporativovbdb2025@gmail.com'
-app.config['MAIL_PASSWORD'] = 'aizr awfd qgug udjb'  # Contraseña de aplicación
-app.config['MAIL_DEFAULT_SENDER'] = 'corporativovbdb2025@gmail.com'
+# Configuración de correo Mailgun - USAR VARIABLES DE ENTORNO
+app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.mailgun.org')
+app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
+app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'True').lower() == 'true'
+app.config['MAIL_USE_SSL'] = os.environ.get('MAIL_USE_SSL', 'False').lower() == 'true'
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', 'corporativovb@sandboxa92ea0efebee474b934033418f510063.mailgun.org')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '')
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', 'corporativovbdb2025@gmail.com')
 app.config['MAIL_TIMEOUT'] = 30
 app.config['MAIL_DEBUG'] = False
 
@@ -177,67 +178,64 @@ def convert_google_drive_url(url):
     
     return url
 
-def enviar_correo_gmail(destinatario, asunto, cuerpo):
-    """Función robusta para enviar emails con Gmail en Railway"""
-    max_intentos = 3
+def enviar_correo(destinatario, asunto, cuerpo):
+    """Función robusta para enviar emails con Mailgun en Railway"""
+    max_intentos = 2
     intento = 1
     
     while intento <= max_intentos:
         try:
             logger.info(f"📧 Intentando enviar correo a {destinatario} (intento {intento}/{max_intentos})")
             
-            # Configuración de Gmail
-            gmail_user = 'corporativovbdb2025@gmail.com'
-            gmail_password = 'aizr awfd qgug udjb'
+            # Configuración desde variables de entorno
+            mail_server = app.config['MAIL_SERVER']
+            mail_port = app.config['MAIL_PORT']
+            mail_username = app.config['MAIL_USERNAME']
+            mail_password = app.config['MAIL_PASSWORD']
+            
+            if not mail_password:
+                logger.error("❌ Password de Mailgun no configurado")
+                # Guardar en log para no perder los emails
+                with open('emails_pendientes.log', 'a') as f:
+                    f.write(f"{datetime.now()}|{destinatario}|{asunto}|{cuerpo[:200]}...\n")
+                return False
             
             # Crear mensaje
             msg = MIMEMultipart()
-            msg['From'] = gmail_user
+            msg['From'] = f"Corporativo Vicente Blas <{app.config['MAIL_DEFAULT_SENDER']}>"
             msg['To'] = destinatario
             msg['Subject'] = asunto
             msg.attach(MIMEText(cuerpo, 'plain'))
             
-            # Intentar puerto 587 con TLS
-            try:
-                server = smtplib.SMTP('smtp.gmail.com', 587, timeout=15)
-                server.ehlo()
-                server.starttls()
-                server.ehlo()
-                server.login(gmail_user, gmail_password)
-                server.sendmail(gmail_user, destinatario, msg.as_string())
-                server.quit()
-                logger.info("✅ Correo enviado exitosamente via puerto 587")
-                return True
-            except Exception as e:
-                logger.warning(f"⚠️ Puerto 587 falló: {e}")
-                
-                # Intentar puerto 465 con SSL
-                try:
-                    server = smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=15)
-                    server.ehlo()
-                    server.login(gmail_user, gmail_password)
-                    server.sendmail(gmail_user, destinatario, msg.as_string())
-                    server.quit()
-                    logger.info("✅ Correo enviado exitosamente via puerto 465")
-                    return True
-                except Exception as e2:
-                    logger.warning(f"⚠️ Puerto 465 también falló: {e2}")
-                    raise Exception(f"Ambos puertos fallaron: 587={e}, 465={e2}")
-                    
+            # Conexión SMTP con Mailgun
+            server = smtplib.SMTP(mail_server, mail_port, timeout=15)
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+            server.login(mail_username, mail_password)
+            server.sendmail(msg['From'], destinatario, msg.as_string())
+            server.quit()
+            
+            logger.info("✅ Correo enviado exitosamente via Mailgun")
+            return True
+            
         except Exception as e:
-            logger.error(f"❌ Error en intento {intento}: {e}")
+            logger.error(f"❌ Error en intento {intento}: {str(e)}")
             if intento == max_intentos:
                 logger.error("🔥 Todos los intentos fallaron")
+                # Guardar en log para recuperar después
+                with open('emails_fallidos.log', 'a') as f:
+                    f.write(f"{datetime.now()}|{destinatario}|{asunto}|{str(e)}\n")
                 return False
             intento += 1
-            time_module.sleep(5)  # Esperar 5 segundos entre intentos
+            time_module.sleep(2)
     
     return False
 
 def enviar_correo_async(app, destinatario, asunto, cuerpo):
     """Envía correos en segundo plano"""
     with app.app_context():
-        return enviar_correo_gmail(destinatario, asunto, cuerpo)
+        return enviar_correo(destinatario, asunto, cuerpo)
 
 # ✅ FILTRO CORREGIDO
 @app.template_filter('ensure_public_image')
@@ -278,10 +276,10 @@ def debug_email():
         # Test de envío de correo de prueba
         email_status = ""
         try:
-            resultado = enviar_correo_gmail(
+            resultado = enviar_correo(
                 'corporativovbdb2025@gmail.com',
                 '✅ Test Email from Railway',
-                'This is a test email from your Railway app'
+                'This is a test email from your Railway app using Mailgun'
             )
             if resultado:
                 email_status = "✅ Email de prueba enviado exitosamente"
@@ -1220,6 +1218,45 @@ def uploaded_file(filename):
     if os.environ.get('RAILWAY_ENVIRONMENT'):
         return "Funcionalidad de subida de archivos no disponible en producción", 404
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+# Nuevos endpoints para testing
+@app.route('/test-mailgun')
+def test_mailgun():
+    """Endpoint para probar Mailgun"""
+    try:
+        resultado = enviar_correo(
+            'corporativovbdb2025@gmail.com',
+            '🚀 Test Mailgun desde Railway',
+            'Este es un email de prueba usando Mailgun\n\n'
+            f'📅 Hora: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n'
+            f'🌐 Entorno: {os.environ.get("RAILWAY_ENVIRONMENT", "Desconocido")}'
+        )
+        
+        return jsonify({
+            'success': resultado,
+            'message': '✅ Email enviado correctamente' if resultado else '❌ Error enviando email',
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/mailgun-config')
+def mailgun_config():
+    """Verificar configuración de Mailgun"""
+    config = {
+        'MAIL_SERVER': app.config.get('MAIL_SERVER'),
+        'MAIL_PORT': app.config.get('MAIL_PORT'),
+        'MAIL_USERNAME': app.config.get('MAIL_USERNAME'),
+        'MAIL_PASSWORD_SET': bool(app.config.get('MAIL_PASSWORD')),
+        'MAIL_USE_TLS': app.config.get('MAIL_USE_TLS'),
+        'MAIL_DEFAULT_SENDER': app.config.get('MAIL_DEFAULT_SENDER')
+    }
+    return jsonify(config)
 
 if __name__ == '__main__':
     app.secret_key = 'super_secret_key'
